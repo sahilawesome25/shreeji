@@ -104,7 +104,14 @@ function serializeRx(row) {
   return { id: row.id, drug: row.drug, dosage: row.dosage, date: row.date };
 }
 function serializePhoto(row) {
-  return { id: row.id, label: row.label };
+  return { id: row.id, label: row.label, hasImage: !!row.mime };
+}
+
+// "Jul 30"-style display date, matching the seed data's date strings.
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function displayDateToday() {
+  const d = new Date();
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
 }
 
 // Loads patients (all, or one by id) with their child rows, using one query
@@ -117,10 +124,13 @@ async function loadPatients(id = null) {
   const ids = patients.map(p => p.id);
 
   const children = {};
-  for (const table of ['treatments', 'invoices', 'prescriptions', 'photos']) {
+  for (const table of ['treatments', 'invoices', 'prescriptions']) {
     const [rows] = await pool.query(`SELECT * FROM ${table} WHERE patient_id IN (?)`, [ids]);
     children[table] = rows;
   }
+  // Never pull the image blobs into list responses.
+  const [photoRows] = await pool.query('SELECT id, patient_id, label, mime FROM photos WHERE patient_id IN (?)', [ids]);
+  children.photos = photoRows;
   const byPatient = (rows, pid) => rows.filter(r => r.patient_id === pid);
 
   return patients.map(row => {
@@ -208,6 +218,123 @@ app.post('/api/patients', wrap(async (req, res) => {
   res.status(201).json(patient);
 }));
 
+app.patch('/api/patients/:id', wrap(async (req, res) => {
+  const [[existing]] = await pool.query('SELECT id FROM patients WHERE id = ?', [req.params.id]);
+  if (!existing) return res.status(404).json({ error: 'Patient not found' });
+  const { name, age, gender, phone, dob, address, allergies, medicalNotes } = req.body || {};
+  if (name !== undefined && !String(name).trim()) {
+    return res.status(400).json({ error: 'Please enter the patient’s name.' });
+  }
+  const columns = {
+    name: name !== undefined ? String(name).trim() : undefined,
+    age, gender, phone, dob, address, allergies,
+    medical_notes: medicalNotes,
+  };
+  const sets = [];
+  const values = [];
+  for (const [col, value] of Object.entries(columns)) {
+    if (value !== undefined) { sets.push(`${col} = ?`); values.push(value); }
+  }
+  if (sets.length) {
+    await pool.query(`UPDATE patients SET ${sets.join(', ')} WHERE id = ?`, [...values, req.params.id]);
+  }
+  const [patient] = await loadPatients(req.params.id);
+  res.json(patient);
+}));
+
+app.delete('/api/patients/:id', wrap(async (req, res) => {
+  const [result] = await pool.query('DELETE FROM patients WHERE id = ?', [req.params.id]);
+  if (!result.affectedRows) return res.status(404).json({ error: 'Patient not found' });
+  res.json({ ok: true });
+}));
+
+// ── treatments ──────────────────────────────────────────────────────────
+
+app.post('/api/patients/:id/treatments', wrap(async (req, res) => {
+  const [[patient]] = await pool.query('SELECT id FROM patients WHERE id = ?', [req.params.id]);
+  if (!patient) return res.status(404).json({ error: 'Patient not found' });
+  const { name, status, progress } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: 'Please enter the treatment name.' });
+  const id = 't_' + crypto.randomUUID();
+  await pool.query('INSERT INTO treatments (id, patient_id, name, date, status, progress) VALUES (?, ?, ?, ?, ?, ?)', [
+    id, req.params.id, String(name).trim(), displayDateToday(),
+    status || 'Planned',
+    Math.min(100, Math.max(0, Number(progress) || 0)),
+  ]);
+  const [[row]] = await pool.query('SELECT * FROM treatments WHERE id = ?', [id]);
+  res.status(201).json(serializeTreatment(row));
+}));
+
+app.patch('/api/treatments/:id', wrap(async (req, res) => {
+  const [[row]] = await pool.query('SELECT * FROM treatments WHERE id = ?', [req.params.id]);
+  if (!row) return res.status(404).json({ error: 'Treatment not found' });
+  const { status, progress } = req.body || {};
+  await pool.query('UPDATE treatments SET status = ?, progress = ? WHERE id = ?', [
+    status || row.status,
+    progress !== undefined ? Math.min(100, Math.max(0, Number(progress) || 0)) : row.progress,
+    req.params.id,
+  ]);
+  const [[updated]] = await pool.query('SELECT * FROM treatments WHERE id = ?', [req.params.id]);
+  res.json(serializeTreatment(updated));
+}));
+
+app.delete('/api/treatments/:id', wrap(async (req, res) => {
+  const [result] = await pool.query('DELETE FROM treatments WHERE id = ?', [req.params.id]);
+  if (!result.affectedRows) return res.status(404).json({ error: 'Treatment not found' });
+  res.json({ ok: true });
+}));
+
+// ── prescriptions ───────────────────────────────────────────────────────
+
+app.post('/api/patients/:id/rx', wrap(async (req, res) => {
+  const [[patient]] = await pool.query('SELECT id FROM patients WHERE id = ?', [req.params.id]);
+  if (!patient) return res.status(404).json({ error: 'Patient not found' });
+  const { drug, dosage } = req.body || {};
+  if (!drug || !String(drug).trim()) return res.status(400).json({ error: 'Please enter the medicine name.' });
+  const id = 'r_' + crypto.randomUUID();
+  await pool.query('INSERT INTO prescriptions (id, patient_id, drug, dosage, date) VALUES (?, ?, ?, ?, ?)', [
+    id, req.params.id, String(drug).trim(), dosage || '', displayDateToday(),
+  ]);
+  const [[row]] = await pool.query('SELECT * FROM prescriptions WHERE id = ?', [id]);
+  res.status(201).json(serializeRx(row));
+}));
+
+app.delete('/api/rx/:id', wrap(async (req, res) => {
+  const [result] = await pool.query('DELETE FROM prescriptions WHERE id = ?', [req.params.id]);
+  if (!result.affectedRows) return res.status(404).json({ error: 'Prescription not found' });
+  res.json({ ok: true });
+}));
+
+// ── photos ──────────────────────────────────────────────────────────────
+
+app.post('/api/patients/:id/photos', express.raw({ type: 'image/*', limit: '8mb' }), wrap(async (req, res) => {
+  const [[patient]] = await pool.query('SELECT id FROM patients WHERE id = ?', [req.params.id]);
+  if (!patient) return res.status(404).json({ error: 'Patient not found' });
+  if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+    return res.status(400).json({ error: 'No image received.' });
+  }
+  const label = String(req.query.label || '').trim() || `Photo · ${displayDateToday()}`;
+  const id = 'ph_' + crypto.randomUUID();
+  await pool.query('INSERT INTO photos (id, patient_id, label, mime, data) VALUES (?, ?, ?, ?, ?)', [
+    id, req.params.id, label.slice(0, 200), req.headers['content-type'], req.body,
+  ]);
+  res.status(201).json({ id, label: label.slice(0, 200), hasImage: true });
+}));
+
+app.get('/api/photos/:id/image', wrap(async (req, res) => {
+  const [[row]] = await pool.query('SELECT mime, data FROM photos WHERE id = ?', [req.params.id]);
+  if (!row || !row.data) return res.status(404).json({ error: 'Photo not found' });
+  res.setHeader('Content-Type', row.mime || 'image/jpeg');
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  res.send(row.data);
+}));
+
+app.delete('/api/photos/:id', wrap(async (req, res) => {
+  const [result] = await pool.query('DELETE FROM photos WHERE id = ?', [req.params.id]);
+  if (!result.affectedRows) return res.status(404).json({ error: 'Photo not found' });
+  res.json({ ok: true });
+}));
+
 // ── appointments ────────────────────────────────────────────────────────
 
 app.get('/api/appointments', wrap(async (req, res) => {
@@ -243,6 +370,31 @@ app.post('/api/appointments', wrap(async (req, res) => {
 }));
 
 // ── invoices ────────────────────────────────────────────────────────────
+
+app.post('/api/patients/:id/invoices', wrap(async (req, res) => {
+  const [[patient]] = await pool.query('SELECT id FROM patients WHERE id = ?', [req.params.id]);
+  if (!patient) return res.status(404).json({ error: 'Patient not found' });
+  const { description, amount } = req.body || {};
+  if (!description || !String(description).trim()) {
+    return res.status(400).json({ error: 'Please enter a description.' });
+  }
+  const amt = Math.round(Number(amount));
+  if (!Number.isFinite(amt) || amt <= 0) {
+    return res.status(400).json({ error: 'Please enter a valid amount.' });
+  }
+  const id = 'i_' + crypto.randomUUID();
+  await pool.query('INSERT INTO invoices (id, patient_id, description, date, amount, paid) VALUES (?, ?, ?, ?, ?, 0)', [
+    id, req.params.id, String(description).trim(), displayDateToday(), amt,
+  ]);
+  const [[row]] = await pool.query('SELECT * FROM invoices WHERE id = ?', [id]);
+  res.status(201).json(serializeInvoice(row));
+}));
+
+app.delete('/api/invoices/:id', wrap(async (req, res) => {
+  const [result] = await pool.query('DELETE FROM invoices WHERE id = ?', [req.params.id]);
+  if (!result.affectedRows) return res.status(404).json({ error: 'Invoice not found' });
+  res.json({ ok: true });
+}));
 
 app.patch('/api/invoices/:id', wrap(async (req, res) => {
   const [[row]] = await pool.query('SELECT * FROM invoices WHERE id = ?', [req.params.id]);

@@ -63,6 +63,8 @@ const SCHEMA = [
     id VARCHAR(50) PRIMARY KEY,
     patient_id VARCHAR(50) NOT NULL,
     label VARCHAR(200) NOT NULL,
+    mime VARCHAR(40) NULL,
+    data MEDIUMBLOB NULL,
     CONSTRAINT fk_photos_patient FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
   )`,
   `CREATE TABLE IF NOT EXISTS appointments (
@@ -219,6 +221,15 @@ async function seed() {
 // demo patients) instead of being re-seeded on the next restart.
 async function init() {
   for (const stmt of SCHEMA) await pool.query(stmt);
+
+  // Migration for databases created before photo uploads existed.
+  const [photoCols] = await pool.query(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'photos'`);
+  if (!photoCols.some(c => c.COLUMN_NAME === 'mime')) {
+    await pool.query('ALTER TABLE photos ADD COLUMN mime VARCHAR(40) NULL, ADD COLUMN data MEDIUMBLOB NULL');
+  }
+
   if (process.env.SEED_DEMO_DATA === 'false') return;
   const [[{ n }]] = await pool.query('SELECT COUNT(*) AS n FROM patients');
   if (n === 0) {

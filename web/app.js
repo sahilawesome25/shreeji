@@ -40,6 +40,17 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ paid }),
     }),
+    json: (method, path, body) => api.request(path, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {}),
+    }),
+    del: (path) => api.request(path, { method: 'DELETE' }),
+    fetchPatient: (id) => api.request('/patients/' + id),
+    addPhoto: (patientId, label, blob) => api.request(
+      `/patients/${patientId}/photos?label=${encodeURIComponent(label)}`,
+      { method: 'POST', headers: { 'Content-Type': blob.type || 'image/jpeg' }, body: blob },
+    ),
   };
 
   // ── Date/time helpers (match the iOS app's UTC-based formatting) ──────
@@ -124,6 +135,11 @@
     selectedDate: TODAY,
     npForm: null,
     naForm: null,
+    tForm: null,            // add/edit treatment
+    iForm: null,            // add invoice
+    rForm: null,            // add prescription
+    editingTreatmentId: null,
+    viewingPhotoId: null,
     formError: '',
     submitting: false,
   };
@@ -176,6 +192,8 @@
     const views = {
       home: renderHome, patients: renderPatients, schedule: renderSchedule,
       billing: renderBilling, detail: renderDetail, addPatient: renderAddPatient, addAppt: renderAddAppt,
+      editPatient: renderEditPatient, treatmentForm: renderTreatmentForm,
+      invoiceForm: renderInvoiceForm, rxForm: renderRxForm,
       login: renderLogin,
     };
     if (state.loading) {
@@ -382,6 +400,9 @@
     const back = `<button class="back-btn" data-action="back">${ICONS.chevronLeft}Back</button>`;
     if (!p) return `${back}<div class="empty-state">Patient not found.</div>`;
 
+    const addRowBtn = (label, action) =>
+      `<button class="add-row-btn" data-action="${action}">+ ${label}</button>`;
+
     const tabViews = {
       overview: () => `
         <div class="stack">
@@ -398,25 +419,28 @@
             <div class="info-card-body">${esc(p.medicalNotes)}</div>
           </div>
         </div>`,
-      treatment: () => p.treatments.length
-        ? `<div class="card-list" style="gap:10px">${p.treatments.map(t => {
-            const cls = t.status === 'Completed' ? 'completed' : t.status === 'In Progress' ? 'inprogress' : 'planned';
-            return `<div class="card">
-              <div class="row between" style="margin-bottom:8px">
-                <span class="item-title">${esc(t.name)}</span>
-                <span class="status-pill ${cls}">${esc(t.status)}</span>
-              </div>
-              <div class="item-sub sm">Started ${esc(t.date)}</div>
-              <div class="progress-track"><div class="progress-fill ${cls === 'completed' ? 'completed' : ''}" style="width:${Number(t.progress) || 0}%"></div></div>
-            </div>`;
-          }).join('')}</div>`
-        : '<div class="empty-state">No treatments recorded yet.</div>',
+      treatment: () => `
+        ${addRowBtn('Add treatment', 'add-treatment')}
+        ${p.treatments.length
+          ? `<div class="card-list" style="gap:10px">${p.treatments.map(t => {
+              const cls = t.status === 'Completed' ? 'completed' : t.status === 'In Progress' ? 'inprogress' : 'planned';
+              return `<button class="card treatment-card" data-action="edit-treatment" data-id="${esc(t.id)}">
+                <div class="row between" style="margin-bottom:8px">
+                  <span class="item-title">${esc(t.name)}</span>
+                  <span class="status-pill ${cls}">${esc(t.status)}</span>
+                </div>
+                <div class="item-sub sm">Started ${esc(t.date)} · tap to update</div>
+                <div class="progress-track"><div class="progress-fill ${cls === 'completed' ? 'completed' : ''}" style="width:${Number(t.progress) || 0}%"></div></div>
+              </button>`;
+            }).join('')}</div>`
+          : '<div class="empty-state">No treatments recorded yet.</div>'}`,
       billing: () => `
         <div class="stack">
           <div class="balance-row">
             <span class="bal-label">Balance due</span>
             <span class="bal-amount">${rupees(p.balance)}</span>
           </div>
+          ${addRowBtn('Add invoice', 'add-invoice')}
           ${p.invoices.length
             ? `<div class="card-list">${p.invoices.map(inv => `
                 <div class="card-row" style="cursor:default">
@@ -424,29 +448,46 @@
                     <div class="item-title" style="font-size:13.5px">${esc(inv.description)}</div>
                     <div class="item-sub sm" style="font-size:11.5px">${esc(inv.date)}</div>
                   </span>
-                  <span class="row" style="gap:10px">
+                  <span class="row" style="gap:8px">
                     <span style="font-size:14px;font-weight:700">${rupees(inv.amount)}</span>
                     <button class="pay-btn ${inv.paid ? 'paid' : ''}" data-action="toggle-paid" data-id="${esc(inv.id)}" data-paid="${inv.paid}">
                       ${inv.paid ? 'Paid' : 'Mark Paid'}
                     </button>
+                    <button class="x-btn" data-action="delete-invoice" data-id="${esc(inv.id)}" data-name="${esc(inv.description)}" title="Delete invoice">✕</button>
                   </span>
                 </div>`).join('')}</div>`
             : '<div class="empty-state">No invoices yet.</div>'}
         </div>`,
-      photos: () => p.photos.length
-        ? `<div class="photo-grid">${p.photos.map(ph => `<div class="photo-tile">${esc(ph.label)}</div>`).join('')}</div>`
-        : '<div class="empty-state">No photos uploaded yet.</div>',
-      rx: () => p.rx.length
-        ? `<div class="card-list">${p.rx.map(r => `
-            <div class="card-row" style="cursor:default;display:block">
-              <div class="item-title" style="font-size:14px">${esc(r.drug)}</div>
-              <div class="item-sub">${esc(r.dosage)} · prescribed ${esc(r.date)}</div>
-            </div>`).join('')}</div>`
-        : '<div class="empty-state">No prescriptions recorded.</div>',
+      photos: () => `
+        ${addRowBtn('Add photo', 'add-photo')}
+        ${p.photos.length
+          ? `<div class="photo-grid">${p.photos.map(ph => ph.hasImage
+              ? `<button class="photo-tile has-image" data-action="view-photo" data-id="${esc(ph.id)}" data-label="${esc(ph.label)}">
+                   <img src="/api/photos/${esc(ph.id)}/image" alt="${esc(ph.label)}" loading="lazy" />
+                 </button>`
+              : `<div class="photo-tile">${esc(ph.label)}</div>`).join('')}</div>`
+          : '<div class="empty-state">No photos uploaded yet.</div>'}`,
+      rx: () => `
+        ${addRowBtn('Add prescription', 'add-rx')}
+        ${p.rx.length
+          ? `<div class="card-list">${p.rx.map(r => `
+              <div class="card-row" style="cursor:default">
+                <span>
+                  <div class="item-title" style="font-size:14px">${esc(r.drug)}</div>
+                  <div class="item-sub">${esc(r.dosage)} · prescribed ${esc(r.date)}</div>
+                </span>
+                <button class="x-btn" data-action="delete-rx" data-id="${esc(r.id)}" data-name="${esc(r.drug)}" title="Delete prescription">✕</button>
+              </div>`).join('')}</div>`
+          : '<div class="empty-state">No prescriptions recorded.</div>'}`,
     };
 
+    const viewer = state.viewingPhotoId ? renderPhotoViewer(p) : '';
+
     return `
-      ${back}
+      <div class="row between">
+        ${back}
+        <button class="see-all" data-action="edit-patient" style="margin-bottom:14px">Edit</button>
+      </div>
       <div class="detail-head">
         ${avatarHtml(p, true)}
         <div>
@@ -459,7 +500,24 @@
           `<button class="${state.detailTab === t.id ? 'active' : ''}" data-action="detail-tab" data-tab="${t.id}">${t.label}</button>`
         ).join('')}
       </div>
-      ${tabViews[state.detailTab]()}`;
+      ${tabViews[state.detailTab]()}
+      ${viewer}`;
+  }
+
+  function renderPhotoViewer(p) {
+    const photo = p.photos.find(ph => ph.id === state.viewingPhotoId);
+    if (!photo) return '';
+    return `
+      <div class="photo-viewer" data-action="close-photo">
+        <img src="/api/photos/${esc(photo.id)}/image" alt="${esc(photo.label)}" />
+        <div class="photo-viewer-bar">
+          <span>${esc(photo.label)}</span>
+          <span class="row" style="gap:14px">
+            <button data-action="delete-photo" data-id="${esc(photo.id)}">Delete</button>
+            <button data-action="close-photo">Close</button>
+          </span>
+        </div>
+      </div>`;
   }
 
   function field(label, inner) {
@@ -518,15 +576,108 @@
       </form>`;
   }
 
+  function renderEditPatient() {
+    const f = state.npForm;
+    return `
+      <div class="form-header">
+        <button class="cancel" data-action="cancel-detail-form">Cancel</button>
+        <span class="form-title">Edit Patient</span>
+        <button class="save" data-action="save-edit-patient" ${state.submitting ? 'disabled' : ''}>Save</button>
+      </div>
+      ${state.formError ? `<div class="error-banner">${esc(state.formError)}</div>` : ''}
+      <form class="form-stack" id="np-form">
+        ${field('Full name', `<input name="name" value="${esc(f.name)}" />`)}
+        <div class="form-cols">
+          ${field('Age', `<input name="age" value="${esc(f.age)}" inputmode="numeric" />`)}
+          ${selectField('Gender', 'gender', f.gender, ['Female', 'Male', 'Other'].map(g => ({ value: g, label: g })))}
+        </div>
+        ${field('Phone', `<input name="phone" value="${esc(f.phone)}" inputmode="tel" />`)}
+        ${field('Date of birth', `<input name="dob" type="date" value="${esc(f.dob)}" />`)}
+        ${field('Address', `<input name="address" value="${esc(f.address)}" />`)}
+        ${field('Allergies / medical alerts', `<input name="allergies" value="${esc(f.allergies)}" />`)}
+        ${field('Dental notes', `<textarea name="medicalNotes">${esc(f.medicalNotes)}</textarea>`)}
+      </form>
+      <button class="danger-btn" data-action="delete-patient">Delete Patient</button>`;
+  }
+
+  function renderTreatmentForm() {
+    const f = state.tForm;
+    const editing = !!state.editingTreatmentId;
+    return `
+      <div class="form-header">
+        <button class="cancel" data-action="cancel-detail-form">Cancel</button>
+        <span class="form-title">${editing ? 'Update Treatment' : 'New Treatment'}</span>
+        <button class="save" data-action="save-treatment" ${state.submitting ? 'disabled' : ''}>Save</button>
+      </div>
+      ${state.formError ? `<div class="error-banner">${esc(state.formError)}</div>` : ''}
+      <form class="form-stack" id="t-form">
+        ${editing
+          ? `<div class="field"><label>Treatment</label><div class="static-value">${esc(f.name)}</div></div>`
+          : field('Treatment name', `<input name="name" value="${esc(f.name)}" placeholder="e.g. Root Canal — Tooth #36" />`)}
+        ${selectField('Status', 'status', f.status, ['Planned', 'In Progress', 'Completed'].map(s => ({ value: s, label: s })))}
+        ${field('Progress (%)', `<input name="progress" type="number" min="0" max="100" value="${esc(f.progress)}" inputmode="numeric" />`)}
+      </form>
+      ${editing ? '<button class="danger-btn" data-action="delete-treatment">Delete Treatment</button>' : ''}`;
+  }
+
+  function renderInvoiceForm() {
+    const f = state.iForm;
+    return `
+      <div class="form-header">
+        <button class="cancel" data-action="cancel-detail-form">Cancel</button>
+        <span class="form-title">New Invoice</span>
+        <button class="save" data-action="save-invoice" ${state.submitting ? 'disabled' : ''}>Save</button>
+      </div>
+      ${state.formError ? `<div class="error-banner">${esc(state.formError)}</div>` : ''}
+      <form class="form-stack" id="i-form">
+        ${field('Description', `<input name="description" value="${esc(f.description)}" placeholder="e.g. Root Canal — Session 1" />`)}
+        ${field('Amount (₹)', `<input name="amount" type="number" min="1" value="${esc(f.amount)}" inputmode="numeric" />`)}
+      </form>`;
+  }
+
+  function renderRxForm() {
+    const f = state.rForm;
+    return `
+      <div class="form-header">
+        <button class="cancel" data-action="cancel-detail-form">Cancel</button>
+        <span class="form-title">New Prescription</span>
+        <button class="save" data-action="save-rx" ${state.submitting ? 'disabled' : ''}>Save</button>
+      </div>
+      ${state.formError ? `<div class="error-banner">${esc(state.formError)}</div>` : ''}
+      <form class="form-stack" id="r-form">
+        ${field('Medicine', `<input name="drug" value="${esc(f.drug)}" placeholder="e.g. Amoxicillin 500mg" />`)}
+        ${field('Dosage / instructions', `<input name="dosage" value="${esc(f.dosage)}" placeholder="e.g. 1 tab, 3x/day, 5 days" />`)}
+      </form>`;
+  }
+
   // ── Form state capture ────────────────────────────────────────────────
 
   function captureForm() {
-    const form = document.getElementById(state.screen === 'addPatient' ? 'np-form' : 'na-form');
+    const formsByScreen = {
+      addPatient: ['np-form', () => state.npForm],
+      editPatient: ['np-form', () => state.npForm],
+      addAppt: ['na-form', () => state.naForm],
+      treatmentForm: ['t-form', () => state.tForm],
+      invoiceForm: ['i-form', () => state.iForm],
+      rxForm: ['r-form', () => state.rForm],
+    };
+    const entry = formsByScreen[state.screen];
+    if (!entry) return;
+    const form = document.getElementById(entry[0]);
     if (!form) return;
-    const target = state.screen === 'addPatient' ? state.npForm : state.naForm;
+    const target = entry[1]();
     for (const el of form.elements) {
       if (el.name && el.name in target) target[el.name] = el.value;
     }
+  }
+
+  // Re-fetches one patient and swaps it into local state (keeps balances,
+  // child lists, and ordering consistent with the server).
+  async function refreshPatient(id) {
+    const fresh = await api.fetchPatient(id);
+    const idx = state.patients.findIndex(p => p.id === id);
+    if (idx >= 0) state.patients[idx] = fresh; else state.patients.push(fresh);
+    return fresh;
   }
 
   // ── Actions ───────────────────────────────────────────────────────────
@@ -654,6 +805,200 @@
       state.submitting = false;
       render();
     },
+    'cancel-detail-form': () => {
+      state.formError = '';
+      state.screen = 'detail';
+      render();
+    },
+    'edit-patient': () => {
+      const p = patientById(state.selectedPatientId);
+      if (!p) return;
+      state.formError = '';
+      state.npForm = {
+        name: p.name, age: p.age === '—' ? '' : p.age, gender: p.gender,
+        phone: p.phone === '—' ? '' : p.phone,
+        dob: /^\d{4}-\d{2}-\d{2}$/.test(p.dob) ? p.dob : '',
+        address: p.address === '—' ? '' : p.address,
+        allergies: p.allergies, medicalNotes: p.medicalNotes,
+      };
+      state.screen = 'editPatient';
+      render();
+    },
+    'save-edit-patient': async () => {
+      captureForm();
+      if (!state.npForm.name.trim()) {
+        state.formError = 'Please enter the patient’s name.';
+        render();
+        return;
+      }
+      state.submitting = true;
+      render();
+      try {
+        const f = state.npForm;
+        const updated = await api.json('PATCH', '/patients/' + state.selectedPatientId, {
+          name: f.name, age: f.age || '—', gender: f.gender, phone: f.phone || '—',
+          dob: f.dob || '—', address: f.address || '—',
+          allergies: f.allergies || 'None known', medicalNotes: f.medicalNotes || 'No notes yet.',
+        });
+        const idx = state.patients.findIndex(p => p.id === updated.id);
+        if (idx >= 0) state.patients[idx] = updated;
+        state.screen = 'detail';
+      } catch (e) {
+        state.formError = e.message || 'Couldn’t save changes.';
+      }
+      state.submitting = false;
+      render();
+    },
+    'delete-patient': async () => {
+      const p = patientById(state.selectedPatientId);
+      if (!p) return;
+      if (!window.confirm(`Delete ${p.name} and ALL their records (appointments, treatments, invoices, prescriptions, photos)? This cannot be undone.`)) return;
+      state.submitting = true;
+      render();
+      try {
+        await api.del('/patients/' + p.id);
+        state.patients = state.patients.filter(x => x.id !== p.id);
+        state.appointments = state.appointments.filter(a => a.patientId !== p.id);
+        state.selectedPatientId = null;
+        state.screen = state.activeTab;
+      } catch (e) {
+        state.formError = e.message || 'Couldn’t delete patient.';
+      }
+      state.submitting = false;
+      render();
+    },
+    'add-treatment': () => {
+      state.formError = '';
+      state.editingTreatmentId = null;
+      state.tForm = { name: '', status: 'Planned', progress: '0' };
+      state.screen = 'treatmentForm';
+      render();
+    },
+    'edit-treatment': (el) => {
+      const p = patientById(state.selectedPatientId);
+      const t = p?.treatments.find(x => x.id === el.dataset.id);
+      if (!t) return;
+      state.formError = '';
+      state.editingTreatmentId = t.id;
+      state.tForm = { name: t.name, status: t.status, progress: String(t.progress) };
+      state.screen = 'treatmentForm';
+      render();
+    },
+    'save-treatment': async () => {
+      captureForm();
+      if (!state.editingTreatmentId && !state.tForm.name.trim()) {
+        state.formError = 'Please enter the treatment name.';
+        render();
+        return;
+      }
+      state.submitting = true;
+      render();
+      try {
+        if (state.editingTreatmentId) {
+          await api.json('PATCH', '/treatments/' + state.editingTreatmentId, {
+            status: state.tForm.status, progress: state.tForm.progress,
+          });
+        } else {
+          await api.json('POST', `/patients/${state.selectedPatientId}/treatments`, state.tForm);
+        }
+        await refreshPatient(state.selectedPatientId);
+        state.screen = 'detail';
+      } catch (e) {
+        state.formError = e.message || 'Couldn’t save treatment.';
+      }
+      state.submitting = false;
+      render();
+    },
+    'delete-treatment': async () => {
+      if (!window.confirm(`Delete treatment “${state.tForm.name}”?`)) return;
+      state.submitting = true;
+      render();
+      try {
+        await api.del('/treatments/' + state.editingTreatmentId);
+        await refreshPatient(state.selectedPatientId);
+        state.screen = 'detail';
+      } catch (e) {
+        state.formError = e.message || 'Couldn’t delete treatment.';
+      }
+      state.submitting = false;
+      render();
+    },
+    'add-invoice': () => {
+      state.formError = '';
+      state.iForm = { description: '', amount: '' };
+      state.screen = 'invoiceForm';
+      render();
+    },
+    'save-invoice': async () => {
+      captureForm();
+      state.submitting = true;
+      render();
+      try {
+        await api.json('POST', `/patients/${state.selectedPatientId}/invoices`, state.iForm);
+        await refreshPatient(state.selectedPatientId);
+        state.screen = 'detail';
+      } catch (e) {
+        state.formError = e.message || 'Couldn’t save invoice.';
+      }
+      state.submitting = false;
+      render();
+    },
+    'delete-invoice': async (el) => {
+      if (!window.confirm(`Delete invoice “${el.dataset.name}”?`)) return;
+      try {
+        await api.del('/invoices/' + el.dataset.id);
+        await refreshPatient(state.selectedPatientId);
+        render();
+      } catch { /* row stays; user can retry */ }
+    },
+    'add-rx': () => {
+      state.formError = '';
+      state.rForm = { drug: '', dosage: '' };
+      state.screen = 'rxForm';
+      render();
+    },
+    'save-rx': async () => {
+      captureForm();
+      state.submitting = true;
+      render();
+      try {
+        await api.json('POST', `/patients/${state.selectedPatientId}/rx`, state.rForm);
+        await refreshPatient(state.selectedPatientId);
+        state.screen = 'detail';
+      } catch (e) {
+        state.formError = e.message || 'Couldn’t save prescription.';
+      }
+      state.submitting = false;
+      render();
+    },
+    'delete-rx': async (el) => {
+      if (!window.confirm(`Delete prescription “${el.dataset.name}”?`)) return;
+      try {
+        await api.del('/rx/' + el.dataset.id);
+        await refreshPatient(state.selectedPatientId);
+        render();
+      } catch { /* row stays; user can retry */ }
+    },
+    'add-photo': () => {
+      document.getElementById('photo-input')?.click();
+    },
+    'view-photo': (el) => {
+      state.viewingPhotoId = el.dataset.id;
+      render();
+    },
+    'close-photo': () => {
+      state.viewingPhotoId = null;
+      render();
+    },
+    'delete-photo': async (el) => {
+      if (!window.confirm('Delete this photo?')) return;
+      try {
+        await api.del('/photos/' + el.dataset.id);
+        state.viewingPhotoId = null;
+        await refreshPatient(state.selectedPatientId);
+        render();
+      } catch { /* viewer stays; user can retry */ }
+    },
     'toggle-paid': async (el) => {
       const wasPaid = el.dataset.paid === 'true';
       try {
@@ -705,6 +1050,39 @@
             </button>`;
           }).join('')}</div>`
         : '<div class="empty-state">No patients match your search.</div>');
+    }
+  });
+
+  // ── Photo upload ──────────────────────────────────────────────────────
+
+  // Downscale on the phone before upload: dental photos don't need more than
+  // ~1400px, and it keeps the database small.
+  async function compressImage(file) {
+    try {
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.82));
+      if (blob) return blob;
+    } catch { /* fall through to the original file */ }
+    return file;
+  }
+
+  document.getElementById('photo-input').addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !state.selectedPatientId) return;
+    const label = `Photo · ${formatDisplayDate(TODAY)}`;
+    try {
+      const blob = await compressImage(file);
+      await api.addPhoto(state.selectedPatientId, label, blob);
+      await refreshPatient(state.selectedPatientId);
+      render();
+    } catch (err) {
+      window.alert(err.message || 'Couldn’t upload the photo.');
     }
   });
 

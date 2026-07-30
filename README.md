@@ -136,12 +136,23 @@ Both clients (web and iOS) match the approved prototype
 - **Patients** — search, filter chips (All / In Treatment / New / Overdue),
   patient list with status badges.
 - **Patient Detail** — Overview, Treatment (progress bars), Billing
-  (mark-paid), Photos (placeholder grid — no real image upload/storage yet),
-  Rx tabs.
+  (mark-paid), Photos, Rx tabs.
 - **Appointments** — 7-day day-strip calendar, appointments for the selected day.
 - **Billing** — total outstanding, pending payments by patient.
 - **Add Patient / Add Appointment** — forms with the same fields and
   validation as the prototype.
+
+The web app goes beyond the prototype with full record editing:
+
+- **Edit / delete patients** (Edit button on the detail screen; delete
+  cascades to all the patient's records).
+- **Treatments** — add, update status/progress, delete.
+- **Invoices** — add, mark paid/unpaid, delete.
+- **Prescriptions** — add, delete.
+- **Photos** — real uploads from the phone camera or gallery. Images are
+  downscaled on the device (~1400px JPEG) and stored in MySQL, so they
+  survive redeploys on hosts with ephemeral disks; tap a photo to view
+  full-screen or delete.
 
 Colors were converted 1:1 from the prototype's `oklch()` values to sRGB hex
 (see `AppTheme.swift`).
@@ -161,10 +172,12 @@ Colors were converted 1:1 from the prototype's `oklch()` values to sRGB hex
 - **The iOS app has no login screen yet.** It will get 401s from a backend
   running this version — use the web app on phones, or add cookie handling
   to `APIClient.swift` if the native app is still wanted.
-- **Photos tab is a placeholder.** The prototype never had real image
-  upload/storage either — it showed labeled placeholder tiles. Wiring up
-  actual photo capture/storage (e.g. camera roll + file storage or S3) is a
-  follow-up.
+- **Photos live in MySQL.** Uploads are compressed client-side to roughly
+  100–400 KB each, so thousands of photos fit comfortably in a typical
+  hosting-plan database — but if the clinic grows into heavy photo use,
+  moving image storage to S3-compatible object storage is the upgrade path.
+  The demo patients' seeded photo entries have no image data and render as
+  labeled placeholder tiles.
 - **Take database backups.** The MySQL database is the only copy of the
   clinic's data. On Hostinger, enable automatic backups (or export the
   database from hPanel periodically).
