@@ -5,12 +5,92 @@ const cors = require('cors');
 const { db, avatarForIndex } = require('./db');
 
 const app = express();
+app.set('trust proxy', 1); // behind Caddy/Nginx, so req.secure reflects the real scheme
 app.use(cors());
 app.use(express.json());
 
 // Staff web app (see /web) — served from the same origin as the API.
 const WEB_DIR = path.join(__dirname, '..', '..', 'web');
 app.use(express.static(WEB_DIR));
+
+// ── auth ────────────────────────────────────────────────────────────────
+// Single shared staff password (the app assumes a small trusted staff, not
+// per-user accounts). Sessions are stateless HMAC-signed expiry tokens in an
+// HttpOnly cookie, so they survive server restarts and changing the password
+// invalidates every existing session.
+
+const CLINIC_PASSWORD = process.env.CLINIC_PASSWORD || 'shreeji123';
+if (!process.env.CLINIC_PASSWORD) {
+  console.warn('WARNING: CLINIC_PASSWORD is not set — using the default dev password. Set it before exposing this server to the internet.');
+}
+const SESSION_COOKIE = 'shreeji_session';
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const sessionSecret = crypto.createHash('sha256').update('shreeji-session:' + CLINIC_PASSWORD).digest();
+
+function signSession(exp) {
+  return exp + '.' + crypto.createHmac('sha256', sessionSecret).update(String(exp)).digest('base64url');
+}
+function verifySession(token) {
+  const [expStr, sig] = String(token || '').split('.');
+  if (!expStr || !sig || Number(expStr) < Date.now()) return false;
+  const expected = crypto.createHmac('sha256', sessionSecret).update(expStr).digest('base64url');
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+function cookieValue(req, name) {
+  for (const part of String(req.headers.cookie || '').split(';')) {
+    const [k, ...v] = part.trim().split('=');
+    if (k === name) return v.join('=');
+  }
+  return null;
+}
+function isAuthed(req) {
+  return verifySession(cookieValue(req, SESSION_COOKIE));
+}
+
+// Brute-force throttle: 10 attempts per IP per 15 minutes.
+const loginAttempts = new Map();
+function throttled(ip) {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || entry.resetAt < now) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > 10;
+}
+
+app.post('/api/login', (req, res) => {
+  if (throttled(req.ip)) {
+    return res.status(429).json({ error: 'Too many attempts. Try again in 15 minutes.' });
+  }
+  const given = crypto.createHash('sha256').update(String(req.body?.password ?? '')).digest();
+  const actual = crypto.createHash('sha256').update(CLINIC_PASSWORD).digest();
+  if (!crypto.timingSafeEqual(given, actual)) {
+    return res.status(401).json({ error: 'Incorrect password.' });
+  }
+  loginAttempts.delete(req.ip);
+  const secure = req.secure ? '; Secure' : '';
+  res.setHeader('Set-Cookie',
+    `${SESSION_COOKIE}=${signSession(Date.now() + SESSION_TTL_MS)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_MS / 1000}${secure}`);
+  res.json({ ok: true });
+});
+
+app.post('/api/logout', (req, res) => {
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+  res.json({ ok: true });
+});
+
+app.get('/api/session', (req, res) => res.json({ authenticated: isAuthed(req) }));
+
+// Everything else under /api requires a signed-in session.
+app.use('/api', (req, res, next) => {
+  if (req.path === '/health') return next();
+  if (isAuthed(req)) return next();
+  res.status(401).json({ error: 'Not signed in' });
+});
 
 // ── serialization helpers ──────────────────────────────────────────────
 
