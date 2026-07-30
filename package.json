@@ -1,0 +1,13 @@
+{
+  "name": "shreeji-smile-care",
+  "version": "1.0.0",
+  "description": "Staff patient tracker for Shreeji Smile Care Clinic (web app + API)",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "postinstall": "npm install --prefix backend",
+    "start": "node backend/src/server.js"
+  }
+}

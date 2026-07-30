@@ -1,16 +1,19 @@
 {
   "name": "shreeji-smile-care-backend",
   "version": "1.0.0",
-  "description": "REST API + SQLite backend for the Shreeji Smile Care Clinic iOS app",
+  "description": "REST API + MySQL backend for the Shreeji Smile Care Clinic staff apps",
   "main": "src/server.js",
   "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0",
     "cors": "^2.8.5",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "mysql2": "^3.11.0"
   }
 }

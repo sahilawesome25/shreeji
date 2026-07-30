@@ -1,83 +1,82 @@
-const path = require('path');
-const fs = require('fs');
-const Database = require('better-sqlite3');
+const mysql = require('mysql2/promise');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+// Connection settings: DATABASE_URL (mysql://user:pass@host:port/dbname) wins,
+// otherwise individual MYSQL_* variables, otherwise local-dev defaults that
+// match the README's development setup.
+const pool = process.env.DATABASE_URL
+  ? mysql.createPool(process.env.DATABASE_URL)
+  : mysql.createPool({
+      host: process.env.MYSQL_HOST || 'localhost',
+      port: Number(process.env.MYSQL_PORT) || 3306,
+      user: process.env.MYSQL_USER || 'shreeji',
+      password: process.env.MYSQL_PASSWORD || 'shreeji_dev',
+      database: process.env.MYSQL_DATABASE || 'shreeji',
+      waitForConnections: true,
+      connectionLimit: 5,
+      charset: 'utf8mb4',
+    });
 
-const DB_PATH = path.join(DATA_DIR, 'clinic.sqlite3');
-const isNewDb = !fs.existsSync(DB_PATH);
-
-const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS patients (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    age TEXT,
-    gender TEXT,
-    phone TEXT,
-    dob TEXT,
-    address TEXT,
-    allergies TEXT,
-    status TEXT NOT NULL DEFAULT 'active',
-    last_visit TEXT,
+const SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS patients (
+    id VARCHAR(50) PRIMARY KEY,
+    seq INT NOT NULL AUTO_INCREMENT UNIQUE,
+    name VARCHAR(200) NOT NULL,
+    age VARCHAR(10),
+    gender VARCHAR(20),
+    phone VARCHAR(40),
+    dob VARCHAR(20),
+    address VARCHAR(300),
+    allergies VARCHAR(500),
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    last_visit VARCHAR(40),
     medical_notes TEXT,
-    avatar_bg TEXT NOT NULL,
-    avatar_fg TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS treatments (
-    id TEXT PRIMARY KEY,
-    patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    date TEXT,
-    status TEXT NOT NULL DEFAULT 'Planned',
-    progress INTEGER NOT NULL DEFAULT 0
-  );
-
-  CREATE TABLE IF NOT EXISTS invoices (
-    id TEXT PRIMARY KEY,
-    patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    description TEXT NOT NULL,
-    date TEXT,
-    amount INTEGER NOT NULL DEFAULT 0,
-    paid INTEGER NOT NULL DEFAULT 0
-  );
-
-  CREATE TABLE IF NOT EXISTS prescriptions (
-    id TEXT PRIMARY KEY,
-    patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    drug TEXT NOT NULL,
-    dosage TEXT,
-    date TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS photos (
-    id TEXT PRIMARY KEY,
-    patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    label TEXT NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS appointments (
-    id TEXT PRIMARY KEY,
-    patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    date TEXT NOT NULL,
-    time TEXT NOT NULL,
-    type TEXT NOT NULL,
-    duration INTEGER NOT NULL DEFAULT 30,
-    notes TEXT
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(date);
-  CREATE INDEX IF NOT EXISTS idx_treatments_patient ON treatments(patient_id);
-  CREATE INDEX IF NOT EXISTS idx_invoices_patient ON invoices(patient_id);
-  CREATE INDEX IF NOT EXISTS idx_prescriptions_patient ON prescriptions(patient_id);
-  CREATE INDEX IF NOT EXISTS idx_photos_patient ON photos(patient_id);
-`);
+    avatar_bg VARCHAR(10) NOT NULL,
+    avatar_fg VARCHAR(10) NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS treatments (
+    id VARCHAR(50) PRIMARY KEY,
+    patient_id VARCHAR(50) NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    date VARCHAR(20),
+    status VARCHAR(20) NOT NULL DEFAULT 'Planned',
+    progress INT NOT NULL DEFAULT 0,
+    CONSTRAINT fk_treatments_patient FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS invoices (
+    id VARCHAR(50) PRIMARY KEY,
+    patient_id VARCHAR(50) NOT NULL,
+    description VARCHAR(300) NOT NULL,
+    date VARCHAR(20),
+    amount INT NOT NULL DEFAULT 0,
+    paid TINYINT(1) NOT NULL DEFAULT 0,
+    CONSTRAINT fk_invoices_patient FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS prescriptions (
+    id VARCHAR(50) PRIMARY KEY,
+    patient_id VARCHAR(50) NOT NULL,
+    drug VARCHAR(200) NOT NULL,
+    dosage VARCHAR(200),
+    date VARCHAR(20),
+    CONSTRAINT fk_prescriptions_patient FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS photos (
+    id VARCHAR(50) PRIMARY KEY,
+    patient_id VARCHAR(50) NOT NULL,
+    label VARCHAR(200) NOT NULL,
+    CONSTRAINT fk_photos_patient FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS appointments (
+    id VARCHAR(50) PRIMARY KEY,
+    patient_id VARCHAR(50) NOT NULL,
+    date VARCHAR(10) NOT NULL,
+    time VARCHAR(5) NOT NULL,
+    type VARCHAR(100) NOT NULL,
+    duration INT NOT NULL DEFAULT 30,
+    notes TEXT,
+    INDEX idx_appointments_date (date),
+    CONSTRAINT fk_appointments_patient FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+  )`,
+];
 
 // Same avatar palette as the design prototype's AVATAR_PALETTE.
 const AVATAR_PALETTE = [
@@ -102,7 +101,7 @@ function addDaysIso(iso, n) {
 
 // Seeds the database with the same demo data used in the Claude Design
 // prototype (Shreeji Smile Care.dc.html), so the app is populated on first run.
-function seed() {
+async function seed() {
   const TODAY = todayIso();
 
   const patients = [
@@ -176,42 +175,53 @@ function seed() {
     { id: 'a5', patientId: 'p4', date: addDaysIso(TODAY, 2), time: '13:30', type: 'Braces Adjustment', duration: 30, notes: '' },
   ];
 
-  const insertPatient = db.prepare(`
-    INSERT INTO patients (id, name, age, gender, phone, dob, address, allergies, status, last_visit, medical_notes, avatar_bg, avatar_fg)
-    VALUES (@id, @name, @age, @gender, @phone, @dob, @address, @allergies, @status, @lastVisit, @medicalNotes, @avatarBg, @avatarFg)
-  `);
-  const insertTreatment = db.prepare(`
-    INSERT INTO treatments (id, patient_id, name, date, status, progress) VALUES (@id, @patientId, @name, @date, @status, @progress)
-  `);
-  const insertInvoice = db.prepare(`
-    INSERT INTO invoices (id, patient_id, description, date, amount, paid) VALUES (@id, @patientId, @description, @date, @amount, @paid)
-  `);
-  const insertRx = db.prepare(`
-    INSERT INTO prescriptions (id, patient_id, drug, dosage, date) VALUES (@id, @patientId, @drug, @dosage, @date)
-  `);
-  const insertPhoto = db.prepare(`
-    INSERT INTO photos (id, patient_id, label) VALUES (@id, @patientId, @label)
-  `);
-  const insertAppt = db.prepare(`
-    INSERT INTO appointments (id, patient_id, date, time, type, duration, notes) VALUES (@id, @patientId, @date, @time, @type, @duration, @notes)
-  `);
-
-  const seedTxn = db.transaction(() => {
-    patients.forEach((p, idx) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    for (const [idx, p] of patients.entries()) {
       const avatar = avatarForIndex(idx);
-      insertPatient.run({ ...p, avatarBg: avatar.bg, avatarFg: avatar.fg });
-      p.treatments.forEach(t => insertTreatment.run({ ...t, patientId: p.id }));
-      p.invoices.forEach(inv => insertInvoice.run({ ...inv, patientId: p.id, paid: inv.paid ? 1 : 0 }));
-      p.rx.forEach(r => insertRx.run({ ...r, patientId: p.id }));
-      p.photos.forEach(ph => insertPhoto.run({ ...ph, patientId: p.id }));
-    });
-    appointments.forEach(a => insertAppt.run(a));
-  });
-  seedTxn();
+      await conn.query(
+        `INSERT INTO patients (id, name, age, gender, phone, dob, address, allergies, status, last_visit, medical_notes, avatar_bg, avatar_fg)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [p.id, p.name, p.age, p.gender, p.phone, p.dob, p.address, p.allergies, p.status, p.lastVisit, p.medicalNotes, avatar.bg, avatar.fg]);
+      for (const t of p.treatments) {
+        await conn.query('INSERT INTO treatments (id, patient_id, name, date, status, progress) VALUES (?, ?, ?, ?, ?, ?)',
+          [t.id, p.id, t.name, t.date, t.status, t.progress]);
+      }
+      for (const inv of p.invoices) {
+        await conn.query('INSERT INTO invoices (id, patient_id, description, date, amount, paid) VALUES (?, ?, ?, ?, ?, ?)',
+          [inv.id, p.id, inv.description, inv.date, inv.amount, inv.paid ? 1 : 0]);
+      }
+      for (const r of p.rx) {
+        await conn.query('INSERT INTO prescriptions (id, patient_id, drug, dosage, date) VALUES (?, ?, ?, ?, ?)',
+          [r.id, p.id, r.drug, r.dosage, r.date]);
+      }
+      for (const ph of p.photos) {
+        await conn.query('INSERT INTO photos (id, patient_id, label) VALUES (?, ?, ?)', [ph.id, p.id, ph.label]);
+      }
+    }
+    for (const a of appointments) {
+      await conn.query('INSERT INTO appointments (id, patient_id, date, time, type, duration, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [a.id, a.patientId, a.date, a.time, a.type, a.duration, a.notes]);
+    }
+    await conn.commit();
+  } catch (e) {
+    await conn.rollback();
+    throw e;
+  } finally {
+    conn.release();
+  }
 }
 
-if (isNewDb) {
-  seed();
+// Creates tables and seeds demo data on an empty database. Must complete
+// before the server starts accepting requests.
+async function init() {
+  for (const stmt of SCHEMA) await pool.query(stmt);
+  const [[{ n }]] = await pool.query('SELECT COUNT(*) AS n FROM patients');
+  if (n === 0) {
+    await seed();
+    console.log('Seeded database with demo patients and appointments.');
+  }
 }
 
-module.exports = { db, AVATAR_PALETTE, avatarForIndex, todayIso, addDaysIso };
+module.exports = { pool, init, AVATAR_PALETTE, avatarForIndex, todayIso, addDaysIso };
