@@ -4,7 +4,7 @@ A staff-only patient tracker for Shreeji Smile Care Clinic (Dr. Ritika Mahajan),
 implemented from a [Claude Design](https://claude.ai/design) prototype
 (see `chats/` and `project/` for the original handoff bundle).
 
-- **`backend/`** — Node.js + Express + SQLite REST API. Owns all patient,
+- **`backend/`** — Node.js + Express + MySQL REST API. Owns all patient,
   appointment, treatment, invoice, and prescription data. Also serves the web
   app below.
 - **`web/`** — Progressive web app (staff client). Installable to a phone's
@@ -21,13 +21,27 @@ the dev password `shreeji123` and logs a warning. **Always set a strong
 
 ## Running the web app
 
-Requires Node.js 18+.
+Requires Node.js 18+ and a MySQL (or MariaDB) database. For local development,
+create one that matches the dev defaults:
+
+```sql
+CREATE DATABASE shreeji;
+CREATE USER 'shreeji'@'localhost' IDENTIFIED BY 'shreeji_dev';
+GRANT ALL PRIVILEGES ON shreeji.* TO 'shreeji'@'localhost';
+```
+
+Then:
 
 ```bash
 cd backend
 npm install
 npm start
 ```
+
+The server creates the tables and seeds demo data on first run. To point at a
+different database, set `DATABASE_URL` (`mysql://user:pass@host:3306/dbname`)
+or the individual `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_USER` /
+`MYSQL_PASSWORD` / `MYSQL_DATABASE` variables.
 
 Then open `http://localhost:4000` in a browser — the backend serves the web
 app and the API from the same origin, so there is nothing to configure. Sign
@@ -45,19 +59,34 @@ Changing `CLINIC_PASSWORD` signs every device out immediately.
 3. The app opens full-screen with its own icon, like a native app. No expiry,
    no developer account, and updates apply automatically on the next launch.
 
+## Deploying on Hostinger (Business / Cloud plan)
+
+Hostinger's managed Node.js web app hosting runs this repo directly. The app's
+own file storage there is ephemeral — which is exactly why the data lives in
+MySQL, not on disk.
+
+1. **Create the database**: hPanel → **Databases → MySQL Databases** → create
+   a database and user, note the credentials and host.
+2. **Add the app**: hPanel → **Websites → Add website → Web app (Node.js)** →
+   connect the GitHub repository. The root `package.json` makes the defaults
+   work: install runs `npm install` (which also installs `backend/`), start
+   command is `npm start`.
+3. **Set environment variables** during setup:
+   - `DATABASE_URL` = `mysql://DBUSER:DBPASS@DBHOST:3306/DBNAME` (from step 1)
+   - `CLINIC_PASSWORD` = a strong password of your choosing
+4. **Attach the domain**: choose a subdomain of your existing domain (e.g.
+   `clinic.yourdomain.com`). Hostinger adds the DNS record and provisions
+   HTTPS automatically; your existing sites are untouched.
+
+First start creates the tables and seeds demo data automatically. Staff can
+then open the URL on their phones, sign in, and Add to Home Screen.
+
 ## Running the backend
 
-Requires Node.js 18+.
-
-```bash
-cd backend
-npm install
-npm start
-```
-
-This starts the API (and the web app) on `http://localhost:4000` and creates `backend/data/clinic.sqlite3`
-on first run, seeded with the same demo patients/appointments used in the
-original prototype. Delete `backend/data/` to reset to the seed data.
+See **Running the web app** above — the same `npm start` serves both the API
+and the web app on port 4000 (override with `PORT`). The demo seed runs only
+when the `patients` table is empty; to reset to seed data, drop the tables
+(or the whole database) and restart.
 
 Key endpoints:
 
@@ -131,6 +160,6 @@ Colors were converted 1:1 from the prototype's `oklch()` values to sRGB hex
   upload/storage either — it showed labeled placeholder tiles. Wiring up
   actual photo capture/storage (e.g. camera roll + file storage or S3) is a
   follow-up.
-- **Backend has no deployment story.** It's meant to run locally (or on a
-  machine on the clinic's LAN) for now — no HTTPS, no process manager,
-  no production database.
+- **Take database backups.** The MySQL database is the only copy of the
+  clinic's data. On Hostinger, enable automatic backups (or export the
+  database from hPanel periodically).

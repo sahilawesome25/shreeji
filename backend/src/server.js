@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
-const { db, avatarForIndex } = require('./db');
+const { pool, init, avatarForIndex } = require('./db');
 
 const app = express();
 app.set('trust proxy', 1); // behind Caddy/Nginx, so req.secure reflects the real scheme
@@ -107,40 +107,50 @@ function serializePhoto(row) {
   return { id: row.id, label: row.label };
 }
 
-const selectTreatments = db.prepare('SELECT * FROM treatments WHERE patient_id = ?');
-const selectInvoices = db.prepare('SELECT * FROM invoices WHERE patient_id = ?');
-const selectRx = db.prepare('SELECT * FROM prescriptions WHERE patient_id = ?');
-const selectPhotos = db.prepare('SELECT * FROM photos WHERE patient_id = ?');
+// Loads patients (all, or one by id) with their child rows, using one query
+// per table instead of per patient.
+async function loadPatients(id = null) {
+  const [patients] = id
+    ? await pool.query('SELECT * FROM patients WHERE id = ?', [id])
+    : await pool.query('SELECT * FROM patients ORDER BY seq ASC');
+  if (patients.length === 0) return [];
+  const ids = patients.map(p => p.id);
 
-function serializePatient(row, { detail = false } = {}) {
-  const invoices = selectInvoices.all(row.id).map(serializeInvoice);
-  const balance = invoices.filter(i => !i.paid).reduce((sum, i) => sum + i.amount, 0);
-  const base = {
-    id: row.id,
-    name: row.name,
-    age: row.age,
-    gender: row.gender,
-    phone: row.phone,
-    dob: row.dob,
-    address: row.address,
-    allergies: row.allergies,
-    status: row.status,
-    lastVisit: row.last_visit,
-    medicalNotes: row.medical_notes,
-    avatarBg: row.avatar_bg,
-    avatarFg: row.avatar_fg,
-    balance,
-    pendingInvoiceCount: invoices.filter(i => !i.paid).length,
-  };
-  if (!detail) return base;
-  return {
-    ...base,
-    treatments: selectTreatments.all(row.id).map(serializeTreatment),
-    invoices,
-    rx: selectRx.all(row.id).map(serializeRx),
-    photos: selectPhotos.all(row.id).map(serializePhoto),
-  };
+  const children = {};
+  for (const table of ['treatments', 'invoices', 'prescriptions', 'photos']) {
+    const [rows] = await pool.query(`SELECT * FROM ${table} WHERE patient_id IN (?)`, [ids]);
+    children[table] = rows;
+  }
+  const byPatient = (rows, pid) => rows.filter(r => r.patient_id === pid);
+
+  return patients.map(row => {
+    const invoices = byPatient(children.invoices, row.id).map(serializeInvoice);
+    return {
+      id: row.id,
+      name: row.name,
+      age: row.age,
+      gender: row.gender,
+      phone: row.phone,
+      dob: row.dob,
+      address: row.address,
+      allergies: row.allergies,
+      status: row.status,
+      lastVisit: row.last_visit,
+      medicalNotes: row.medical_notes,
+      avatarBg: row.avatar_bg,
+      avatarFg: row.avatar_fg,
+      balance: invoices.filter(i => !i.paid).reduce((sum, i) => sum + i.amount, 0),
+      pendingInvoiceCount: invoices.filter(i => !i.paid).length,
+      treatments: byPatient(children.treatments, row.id).map(serializeTreatment),
+      invoices,
+      rx: byPatient(children.prescriptions, row.id).map(serializeRx),
+      photos: byPatient(children.photos, row.id).map(serializePhoto),
+    };
+  });
 }
+
+// Express 4 doesn't catch async errors on its own.
+const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 function serializeAppointment(row) {
   return {
@@ -156,93 +166,92 @@ function serializeAppointment(row) {
 
 // ── patients ────────────────────────────────────────────────────────────
 
-app.get('/api/patients', (req, res) => {
-  const rows = db.prepare('SELECT * FROM patients ORDER BY created_at ASC').all();
-  res.json(rows.map(r => serializePatient(r, { detail: true })));
-});
+app.get('/api/patients', wrap(async (req, res) => {
+  res.json(await loadPatients());
+}));
 
-app.get('/api/patients/:id', (req, res) => {
-  const row = db.prepare('SELECT * FROM patients WHERE id = ?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Patient not found' });
-  res.json(serializePatient(row, { detail: true }));
-});
+app.get('/api/patients/:id', wrap(async (req, res) => {
+  const [patient] = await loadPatients(req.params.id);
+  if (!patient) return res.status(404).json({ error: 'Patient not found' });
+  res.json(patient);
+}));
 
-app.post('/api/patients', (req, res) => {
+app.post('/api/patients', wrap(async (req, res) => {
   const { name, age, gender, phone, dob, address, allergies, medicalNotes } = req.body || {};
   if (!name || !String(name).trim()) {
     return res.status(400).json({ error: 'Please enter the patient’s name.' });
   }
-  const count = db.prepare('SELECT COUNT(*) AS n FROM patients').get().n;
+  const [[{ n: count }]] = await pool.query('SELECT COUNT(*) AS n FROM patients');
   const avatar = avatarForIndex(count);
   const id = 'p_' + crypto.randomUUID();
   const today = new Date().toISOString().slice(0, 10);
 
-  db.prepare(`
+  await pool.query(`
     INSERT INTO patients (id, name, age, gender, phone, dob, address, allergies, status, last_visit, medical_notes, avatar_bg, avatar_fg)
-    VALUES (@id, @name, @age, @gender, @phone, @dob, @address, @allergies, 'new', @lastVisit, @medicalNotes, @avatarBg, @avatarFg)
-  `).run({
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?, ?, ?)
+  `, [
     id,
-    name: String(name).trim(),
-    age: age || '—',
-    gender: gender || 'Female',
-    phone: phone || '—',
-    dob: dob || '—',
-    address: address || '—',
-    allergies: allergies || 'None known',
-    lastVisit: 'Today, ' + today,
-    medicalNotes: medicalNotes || 'No notes yet.',
-    avatarBg: avatar.bg,
-    avatarFg: avatar.fg,
-  });
+    String(name).trim(),
+    age || '—',
+    gender || 'Female',
+    phone || '—',
+    dob || '—',
+    address || '—',
+    allergies || 'None known',
+    'Today, ' + today,
+    medicalNotes || 'No notes yet.',
+    avatar.bg,
+    avatar.fg,
+  ]);
 
-  const row = db.prepare('SELECT * FROM patients WHERE id = ?').get(id);
-  res.status(201).json(serializePatient(row, { detail: true }));
-});
+  const [patient] = await loadPatients(id);
+  res.status(201).json(patient);
+}));
 
 // ── appointments ────────────────────────────────────────────────────────
 
-app.get('/api/appointments', (req, res) => {
+app.get('/api/appointments', wrap(async (req, res) => {
   const { date } = req.query;
-  const rows = date
-    ? db.prepare('SELECT * FROM appointments WHERE date = ? ORDER BY time ASC').all(date)
-    : db.prepare('SELECT * FROM appointments ORDER BY date ASC, time ASC').all();
+  const [rows] = date
+    ? await pool.query('SELECT * FROM appointments WHERE date = ? ORDER BY time ASC', [date])
+    : await pool.query('SELECT * FROM appointments ORDER BY date ASC, time ASC');
   res.json(rows.map(serializeAppointment));
-});
+}));
 
-app.post('/api/appointments', (req, res) => {
+app.post('/api/appointments', wrap(async (req, res) => {
   const { patientId, date, time, type, duration, notes } = req.body || {};
   if (!patientId) return res.status(400).json({ error: 'Please select a patient.' });
-  const patient = db.prepare('SELECT id FROM patients WHERE id = ?').get(patientId);
+  const [[patient]] = await pool.query('SELECT id FROM patients WHERE id = ?', [patientId]);
   if (!patient) return res.status(400).json({ error: 'Please select a valid patient.' });
 
   const id = 'a_' + crypto.randomUUID();
-  db.prepare(`
+  await pool.query(`
     INSERT INTO appointments (id, patient_id, date, time, type, duration, notes)
-    VALUES (@id, @patientId, @date, @time, @type, @duration, @notes)
-  `).run({
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `, [
     id,
     patientId,
-    date: date || new Date().toISOString().slice(0, 10),
-    time: time || '10:00',
-    type: type || 'Check-up',
-    duration: Number(duration) || 30,
-    notes: notes || '',
-  });
+    date || new Date().toISOString().slice(0, 10),
+    time || '10:00',
+    type || 'Check-up',
+    Number(duration) || 30,
+    notes || '',
+  ]);
 
-  const row = db.prepare('SELECT * FROM appointments WHERE id = ?').get(id);
+  const [[row]] = await pool.query('SELECT * FROM appointments WHERE id = ?', [id]);
   res.status(201).json(serializeAppointment(row));
-});
+}));
 
 // ── invoices ────────────────────────────────────────────────────────────
 
-app.patch('/api/invoices/:id', (req, res) => {
-  const row = db.prepare('SELECT * FROM invoices WHERE id = ?').get(req.params.id);
+app.patch('/api/invoices/:id', wrap(async (req, res) => {
+  const [[row]] = await pool.query('SELECT * FROM invoices WHERE id = ?', [req.params.id]);
   if (!row) return res.status(404).json({ error: 'Invoice not found' });
   const paid = typeof req.body?.paid === 'boolean' ? req.body.paid : !row.paid;
-  db.prepare('UPDATE invoices SET paid = ? WHERE id = ?').run(paid ? 1 : 0, req.params.id);
-  const updated = db.prepare('SELECT * FROM invoices WHERE id = ?').get(req.params.id);
+  await pool.query('UPDATE invoices SET paid = ? WHERE id = ?', [paid ? 1 : 0, req.params.id]);
+  const [[updated]] = await pool.query('SELECT * FROM invoices WHERE id = ?', [req.params.id]);
   res.json(serializeInvoice(updated));
-});
+}));
 
 // ── misc ────────────────────────────────────────────────────────────────
 
@@ -254,7 +263,19 @@ app.get('*', (req, res, next) => {
   res.sendFile(path.join(WEB_DIR, 'index.html'));
 });
 
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`Shreeji Smile Care API listening on http://localhost:${PORT}`);
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ error: 'Something went wrong. Please try again.' });
 });
+
+const PORT = process.env.PORT || 4000;
+init()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Shreeji Smile Care API listening on http://localhost:${PORT}`);
+    });
+  })
+  .catch((e) => {
+    console.error('Could not initialize the database:', e.message);
+    process.exit(1);
+  });
