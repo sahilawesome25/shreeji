@@ -81,6 +81,11 @@ MySQL, not on disk.
 First start creates the tables and seeds demo data automatically. Staff can
 then open the URL on their phones, sign in, and Add to Home Screen.
 
+Once you no longer want the demo patients (delete them with
+`DELETE FROM patients WHERE id IN ('p1','p2','p3','p4','p5','p6');` in
+phpMyAdmin), add the environment variable `SEED_DEMO_DATA` = `false` so an
+empty patients table is never re-seeded on later restarts.
+
 ## Running the backend
 
 See **Running the web app** above — the same `npm start` serves both the API

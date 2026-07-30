@@ -214,9 +214,12 @@ async function seed() {
 }
 
 // Creates tables and seeds demo data on an empty database. Must complete
-// before the server starts accepting requests.
+// before the server starts accepting requests. Set SEED_DEMO_DATA=false in
+// production so an empty patients table stays empty (e.g. after deleting the
+// demo patients) instead of being re-seeded on the next restart.
 async function init() {
   for (const stmt of SCHEMA) await pool.query(stmt);
+  if (process.env.SEED_DEMO_DATA === 'false') return;
   const [[{ n }]] = await pool.query('SELECT COUNT(*) AS n FROM patients');
   if (n === 0) {
     await seed();
