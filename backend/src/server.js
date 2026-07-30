@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const { db, avatarForIndex } = require('./db');
@@ -6,6 +7,10 @@ const { db, avatarForIndex } = require('./db');
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Staff web app (see /web) — served from the same origin as the API.
+const WEB_DIR = path.join(__dirname, '..', '..', 'web');
+app.use(express.static(WEB_DIR));
 
 // ── serialization helpers ──────────────────────────────────────────────
 
@@ -162,6 +167,12 @@ app.patch('/api/invoices/:id', (req, res) => {
 // ── misc ────────────────────────────────────────────────────────────────
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+
+// Any other GET falls through to the web app's entry point.
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  res.sendFile(path.join(WEB_DIR, 'index.html'));
+});
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
