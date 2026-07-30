@@ -13,8 +13,11 @@ implemented from a [Claude Design](https://claude.ai/design) prototype
 - **`ios/ShreejiSmileCare/`** — Native SwiftUI iOS app (staff client). Talks to
   the backend over HTTP. Requires a Mac with Xcode to install.
 
-There's no login yet — the app assumes a single shared clinic device, matching
-what was agreed when this was scoped.
+The web app is protected by a single shared staff password (no per-user
+accounts — the clinic's staff is small and trusted). Set it with the
+`CLINIC_PASSWORD` environment variable; without it the server falls back to
+the dev password `shreeji123` and logs a warning. **Always set a strong
+`CLINIC_PASSWORD` before exposing the server to the internet.**
 
 ## Running the web app
 
@@ -27,7 +30,10 @@ npm start
 ```
 
 Then open `http://localhost:4000` in a browser — the backend serves the web
-app and the API from the same origin, so there is nothing to configure.
+app and the API from the same origin, so there is nothing to configure. Sign
+in with the clinic password (`CLINIC_PASSWORD` env var, or `shreeji123` in
+dev). Sessions last 30 days; tap the avatar on the Home screen to sign out.
+Changing `CLINIC_PASSWORD` signs every device out immediately.
 
 **Installing on a phone (PWA):**
 
@@ -57,6 +63,9 @@ Key endpoints:
 
 | Method | Path                  | Notes                                  |
 |--------|-----------------------|-----------------------------------------|
+| POST   | `/api/login`          | `{ "password": "…" }` → sets the session cookie (rate-limited) |
+| POST   | `/api/logout`         | Clears the session cookie              |
+| GET    | `/api/session`        | `{ "authenticated": true/false }`      |
 | GET    | `/api/patients`       | All patients, with treatments/invoices/rx/photos and computed balance |
 | GET    | `/api/patients/:id`   | One patient, full detail               |
 | POST   | `/api/patients`       | Create a patient (`name` required)     |
@@ -111,8 +120,13 @@ Colors were converted 1:1 from the prototype's `oklch()` values to sRGB hex
   Swift type-inference pitfalls), it hasn't been verified by an actual build.
   Please open it in Xcode and fix any small issues that surface — flag them
   back if you'd like help.
-- **No authentication.** Scoped out for this pass; the API has no auth and
-  the app has no login screen.
+- **Auth is a single shared password.** Good enough for a small trusted
+  staff, but there are no per-user accounts or audit trail. All `/api`
+  routes except `login`/`logout`/`session`/`health` require the session
+  cookie.
+- **The iOS app has no login screen yet.** It will get 401s from a backend
+  running this version — use the web app on phones, or add cookie handling
+  to `APIClient.swift` if the native app is still wanted.
 - **Photos tab is a placeholder.** The prototype never had real image
   upload/storage either — it showed labeled placeholder tiles. Wiring up
   actual photo capture/storage (e.g. camera roll + file storage or S3) is a

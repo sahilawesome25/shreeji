@@ -10,9 +10,19 @@
       const res = await fetch('/api' + path, options);
       let body = null;
       try { body = await res.json(); } catch { /* non-JSON error body */ }
-      if (!res.ok) throw new Error(body?.error || `Request failed (${res.status})`);
+      if (!res.ok) {
+        const err = new Error(body?.error || `Request failed (${res.status})`);
+        err.status = res.status;
+        throw err;
+      }
       return body;
     },
+    login: (password) => api.request('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    }),
+    logout: () => api.request('/logout', { method: 'POST' }),
     fetchPatients: () => api.request('/patients'),
     fetchAppointments: () => api.request('/appointments'),
     createPatient: (form) => api.request('/patients', {
@@ -166,6 +176,7 @@
     const views = {
       home: renderHome, patients: renderPatients, schedule: renderSchedule,
       billing: renderBilling, detail: renderDetail, addPatient: renderAddPatient, addAppt: renderAddAppt,
+      login: renderLogin,
     };
     if (state.loading) {
       screenEl.innerHTML = '<div class="center-fill"><div class="spinner"></div><div>Loading…</div></div>';
@@ -180,6 +191,9 @@
     if (showTabBar) renderTabbar();
     screenEl.scrollTop = 0;
     window.scrollTo(0, 0);
+    if (state.screen === 'login' && !state.submitting) {
+      document.getElementById('login-password')?.focus();
+    }
   }
 
   function renderTabbar() {
@@ -192,6 +206,30 @@
     tabbarEl.innerHTML = tabs.map(t =>
       `<button data-action="tab" data-tab="${t.id}" class="${state.screen === t.id ? 'active' : ''}">${t.icon}<span>${t.label}</span></button>`
     ).join('');
+  }
+
+  function renderLogin() {
+    return `
+      <div class="login-screen">
+        <div class="login-logo">
+          <svg viewBox="16 9 72 75" fill="none">
+            <path d="M50 22c-6-5-14-7-21-3-9 5-12 16-8 27 4 12 7 25 9 33 1 4 6 4 7 0l4-17c2-7 16-7 18 0l4 17c1 4 6 4 7 0 2-8 5-21 9-33 4-11 1-22-8-27-7-4-15-2-21 3z" fill="#ffffff"/>
+            <path d="M76 14l2.6 6.8L85 23.4l-6.4 2.6L76 32.8l-2.6-6.8-6.4-2.6 6.4-2.6z" fill="#ca9d33"/>
+          </svg>
+        </div>
+        <div class="login-title">Shreeji Smile Care</div>
+        <div class="login-sub">Staff sign in</div>
+        ${state.formError ? `<div class="error-banner" style="width:100%">${esc(state.formError)}</div>` : ''}
+        <form id="login-form" class="login-form">
+          <div class="field">
+            <label>Clinic password</label>
+            <input id="login-password" type="password" autocomplete="current-password" autofocus />
+          </div>
+          <button type="submit" class="login-btn" data-action="sign-in" ${state.submitting ? 'disabled' : ''}>
+            ${state.submitting ? 'Signing in…' : 'Sign In'}
+          </button>
+        </form>
+      </div>`;
   }
 
   function renderHome() {
@@ -216,7 +254,7 @@
           <div class="home-greeting">Good morning,</div>
           <div class="home-name">Dr. Ritika Mahajan</div>
         </div>
-        <div class="avatar" style="background:var(--teal);color:#fff;border-radius:14px;font-size:16px">RM</div>
+        <button class="avatar" data-action="sign-out" title="Sign out" style="background:var(--teal);color:#fff;border-radius:14px;font-size:16px">RM</button>
       </div>
       <div class="overline" style="margin-bottom:8px">Shreeji Smile Care Clinic</div>
       <div class="stat-cards">
@@ -501,8 +539,14 @@
       const [patients, appointments] = await Promise.all([api.fetchPatients(), api.fetchAppointments()]);
       state.patients = patients;
       state.appointments = appointments;
-    } catch {
-      state.loadError = 'Couldn’t reach the server. Is the backend running?';
+      if (state.screen === 'login') { state.screen = 'home'; state.activeTab = 'home'; }
+    } catch (e) {
+      if (e.status === 401) {
+        state.formError = '';
+        state.screen = 'login';
+      } else {
+        state.loadError = 'Couldn’t reach the server. Is the backend running?';
+      }
     }
     state.loading = false;
     render();
@@ -510,6 +554,32 @@
 
   const actions = {
     retry: () => loadAll(),
+    'sign-in': async () => {
+      const input = document.getElementById('login-password');
+      const password = input ? input.value : '';
+      state.submitting = true;
+      state.formError = '';
+      render();
+      try {
+        await api.login(password);
+        state.submitting = false;
+        await loadAll();
+        return;
+      } catch (e) {
+        state.formError = e.message || 'Couldn’t sign in.';
+      }
+      state.submitting = false;
+      render();
+    },
+    'sign-out': async () => {
+      if (!window.confirm('Sign out of Shreeji Smile Care?')) return;
+      try { await api.logout(); } catch { /* cookie may already be gone */ }
+      state.patients = [];
+      state.appointments = [];
+      state.formError = '';
+      state.screen = 'login';
+      render();
+    },
     tab(el) {
       state.screen = el.dataset.tab;
       state.activeTab = el.dataset.tab;
@@ -606,6 +676,13 @@
     if (!el) return;
     e.preventDefault();
     actions[el.dataset.action]?.(el);
+  });
+
+  document.body.addEventListener('submit', (e) => {
+    if (e.target.id === 'login-form') {
+      e.preventDefault();
+      actions['sign-in']();
+    }
   });
 
   document.body.addEventListener('input', (e) => {
