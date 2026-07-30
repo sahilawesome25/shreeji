@@ -5,12 +5,39 @@ implemented from a [Claude Design](https://claude.ai/design) prototype
 (see `chats/` and `project/` for the original handoff bundle).
 
 - **`backend/`** — Node.js + Express + SQLite REST API. Owns all patient,
-  appointment, treatment, invoice, and prescription data.
+  appointment, treatment, invoice, and prescription data. Also serves the web
+  app below.
+- **`web/`** — Progressive web app (staff client). Installable to a phone's
+  home screen straight from the browser — no App Store, no Xcode, no signing.
+  This is the recommended way to use the app on a phone.
 - **`ios/ShreejiSmileCare/`** — Native SwiftUI iOS app (staff client). Talks to
-  the backend over HTTP.
+  the backend over HTTP. Requires a Mac with Xcode to install.
 
 There's no login yet — the app assumes a single shared clinic device, matching
 what was agreed when this was scoped.
+
+## Running the web app
+
+Requires Node.js 18+.
+
+```bash
+cd backend
+npm install
+npm start
+```
+
+Then open `http://localhost:4000` in a browser — the backend serves the web
+app and the API from the same origin, so there is nothing to configure.
+
+**Installing on a phone (PWA):**
+
+1. Make the backend reachable from the phone: run it on a machine on the same
+   Wi-Fi network and browse to `http://<machine-ip>:4000` from the phone, or
+   host it on a small cloud server (see Caveats).
+2. iPhone (Safari): tap **Share → Add to Home Screen**. Android (Chrome): tap
+   the **Install app** prompt or **⋮ → Add to Home screen**.
+3. The app opens full-screen with its own icon, like a native app. No expiry,
+   no developer account, and updates apply automatically on the next launch.
 
 ## Running the backend
 
@@ -22,7 +49,7 @@ npm install
 npm start
 ```
 
-This starts the API on `http://localhost:4000` and creates `backend/data/clinic.sqlite3`
+This starts the API (and the web app) on `http://localhost:4000` and creates `backend/data/clinic.sqlite3`
 on first run, seeded with the same demo patients/appointments used in the
 original prototype. Delete `backend/data/` to reset to the seed data.
 
@@ -58,8 +85,8 @@ Wi-Fi network as the Mac running the backend.
 
 ## What's implemented
 
-Matches the approved prototype (`project/Shreeji Smile Care.dc.html` +
-`chats/chat1.md`) screen-for-screen:
+Both clients (web and iOS) match the approved prototype
+(`project/Shreeji Smile Care.dc.html` + `chats/chat1.md`) screen-for-screen:
 
 - **Home** — greeting, today's appointment count / total patients, quick
   actions, today's schedule.
