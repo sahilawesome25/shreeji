@@ -1,6 +1,6 @@
 /* Caches the app shell so the PWA opens instantly; API calls always hit the
    network (patient data must never be stale). Bump VERSION on shell changes. */
-const VERSION = 'v2';
+const VERSION = 'v3';
 const SHELL = ['/', '/styles.css', '/app.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
