@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<style>
+  @font-face { font-family: system-ui; }
+  body { margin: 0; }
+  ::-webkit-scrollbar { display: none; }
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:oklch(96% 0.01 90);padding:40px;box-sizing:border-box;font-family:-apple-system,system-ui,sans-serif">
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402,874">
+    <div style="height:100%;display:flex;flex-direction:column;background:oklch(98% 0.004 90)">
+
+      <!-- HOME -->
+      <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;overflow:auto;padding:58px 20px 0">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px">
+            <div>
+              <div style="font-size:13px;color:oklch(52% 0.01 240);font-weight:500">Good morning,</div>
+              <div style="font-size:24px;font-weight:700;color:oklch(22% 0.015 240)">Dr. Ritika Mahajan</div>
+            </div>
+            <div style="width:44px;height:44px;border-radius:14px;background:oklch(38% 0.07 195);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:16px;flex-shrink:0">RM</div>
+          </div>
+          <div style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:oklch(52% 0.01 240);font-weight:600;margin-bottom:8px">Shreeji Smile Care Clinic</div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px">
+            <div style="background:oklch(38% 0.07 195);border-radius:16px;padding:14px">
+              <div style="font-size:26px;font-weight:700;color:#fff">{{ homeStats.todayCount }}</div>
+              <div style="font-size:12.5px;color:oklch(90% 0.02 195);font-weight:500">Appointments today</div>
+            </div>
+            <div style="background:oklch(72% 0.13 85);border-radius:16px;padding:14px">
+              <div style="font-size:26px;font-weight:700;color:oklch(24% 0.04 85)">{{ homeStats.patientCount }}</div>
+              <div style="font-size:12.5px;color:oklch(30% 0.05 85);font-weight:600">Total patients</div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;margin-bottom:24px">
+            <div onClick="{{ openAddPatient }}" style="flex:1;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid oklch(90% 0.006 90);border-radius:14px;padding:12px 14px;cursor:pointer">
+              <div style="width:26px;height:26px;border-radius:8px;background:oklch(94% 0.02 195);display:flex;align-items:center;justify-content:center;color:oklch(38% 0.07 195);font-size:17px;font-weight:700">+</div>
+              <span style="font-size:13.5px;font-weight:600;color:oklch(22% 0.015 240)">Add Patient</span>
+            </div>
+            <div onClick="{{ openAddAppt }}" style="flex:1;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid oklch(90% 0.006 90);border-radius:14px;padding:12px 14px;cursor:pointer">
+              <div style="width:26px;height:26px;border-radius:8px;background:oklch(95% 0.03 90);display:flex;align-items:center;justify-content:center;color:oklch(50% 0.1 85);font-size:17px;font-weight:700">+</div>
+              <span style="font-size:13.5px;font-weight:600;color:oklch(22% 0.015 240)">New Appointment</span>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div style="font-size:16px;font-weight:700;color:oklch(22% 0.015 240)">Today's schedule</div>
+            <div onClick="{{ goAppointments }}" style="font-size:13px;font-weight:600;color:oklch(38% 0.07 195);cursor:pointer">See all</div>
+          </div>
+          <sc-if value="{{ homeStats.hasToday }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:8px;padding-bottom:24px">
+              <sc-for list="{{ todaysAppointments }}" as="appt" hint-placeholder-count="3">
+                <div onClick="{{ appt.open }}" style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid oklch(90% 0.006 90);border-radius:14px;padding:12px 14px;cursor:pointer">
+                  <div style="width:52px;flex-shrink:0;text-align:center">
+                    <div style="font-size:14px;font-weight:700;color:oklch(38% 0.07 195)">{{ appt.time }}</div>
+                  </div>
+                  <div style="width:1px;align-self:stretch;background:oklch(90% 0.006 90)"></div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:14.5px;font-weight:600;color:oklch(22% 0.015 240)">{{ appt.patientName }}</div>
+                    <div style="font-size:12.5px;color:oklch(52% 0.01 240)">{{ appt.type }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ homeStats.noToday }}" hint-placeholder-val="{{ false }}">
+            <div style="text-align:center;padding:24px 0;color:oklch(60% 0.01 240);font-size:13.5px">No appointments scheduled today.</div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- PATIENTS LIST -->
+      <sc-if value="{{ isPatients }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;overflow:auto;padding:58px 20px 0">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div style="font-size:26px;font-weight:700;color:oklch(22% 0.015 240)">Patients</div>
+            <div onClick="{{ openAddPatient }}" style="width:34px;height:34px;border-radius:10px;background:oklch(38% 0.07 195);display:flex;align-items:center;justify-content:center;color:#fff;font-size:19px;font-weight:600;cursor:pointer">+</div>
+          </div>
+          <input type="text" placeholder="Search patients..." value="{{ patientSearch }}" onChange="{{ onPatientSearchChange }}" style="width:100%;box-sizing:border-box;padding:11px 14px;border-radius:12px;border:1px solid oklch(90% 0.006 90);background:#fff;font-size:14.5px;margin-bottom:12px;color:oklch(22% 0.015 240)" />
+          <div style="display:flex;gap:8px;margin-bottom:16px;overflow-x:auto">
+            <sc-for list="{{ patientFilters }}" as="f" hint-placeholder-count="4">
+              <div onClick="{{ f.select }}" style="{{ f.style }}">{{ f.label }}</div>
+            </sc-for>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;padding-bottom:24px">
+            <sc-for list="{{ filteredPatients }}" as="p" hint-placeholder-count="5">
+              <div onClick="{{ p.open }}" style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid oklch(90% 0.006 90);border-radius:14px;padding:12px 14px;cursor:pointer">
+                <div style="width:42px;height:42px;border-radius:12px;background:{{ p.avatarBg }};display:flex;align-items:center;justify-content:center;color:{{ p.avatarFg }};font-weight:700;font-size:14px;flex-shrink:0">{{ p.initials }}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:14.5px;font-weight:600;color:oklch(22% 0.015 240)">{{ p.name }}</div>
+                  <div style="font-size:12px;color:oklch(52% 0.01 240)">{{ p.age }} yrs · {{ p.gender }} · Last visit {{ p.lastVisit }}</div>
+                </div>
+                <div style="{{ p.badgeStyle }}">{{ p.badgeLabel }}</div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ noPatientResults }}" hint-placeholder-val="{{ false }}">
+              <div style="text-align:center;padding:30px 0;color:oklch(60% 0.01 240);font-size:13.5px">No patients match your search.</div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- APPOINTMENTS -->
+      <sc-if value="{{ isAppointments }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;overflow:auto;padding:58px 20px 0">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div style="font-size:26px;font-weight:700;color:oklch(22% 0.015 240)">Appointments</div>
+            <div onClick="{{ openAddAppt }}" style="width:34px;height:34px;border-radius:10px;background:oklch(38% 0.07 195);display:flex;align-items:center;justify-content:center;color:#fff;font-size:19px;font-weight:600;cursor:pointer">+</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:16px;overflow-x:auto">
+            <sc-for list="{{ weekDays }}" as="d" hint-placeholder-count="7">
+              <div onClick="{{ d.select }}" style="{{ d.style }}">
+                <div style="font-size:10.5px;font-weight:600;opacity:0.75">{{ d.dow }}</div>
+                <div style="font-size:16px;font-weight:700">{{ d.num }}</div>
+                <sc-if value="{{ d.hasAppt }}" hint-placeholder-val="{{ false }}">
+                  <div style="width:4px;height:4px;border-radius:50%;background:currentColor;margin:2px auto 0"></div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-size:15px;font-weight:700;color:oklch(22% 0.015 240);margin-bottom:10px">{{ selectedDateLabel }}</div>
+          <div style="display:flex;flex-direction:column;gap:8px;padding-bottom:24px">
+            <sc-for list="{{ apptsForSelectedDay }}" as="a" hint-placeholder-count="3">
+              <div onClick="{{ a.open }}" style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid oklch(90% 0.006 90);border-radius:14px;padding:12px 14px;cursor:pointer">
+                <div style="width:50px;flex-shrink:0;font-size:13.5px;font-weight:700;color:oklch(38% 0.07 195)">{{ a.time }}</div>
+                <div style="width:1px;align-self:stretch;background:oklch(90% 0.006 90)"></div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:14.5px;font-weight:600;color:oklch(22% 0.015 240)">{{ a.patientName }}</div>
+                  <div style="font-size:12.5px;color:oklch(52% 0.01 240)">{{ a.type }} · {{ a.duration }}min</div>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ noApptsThisDay }}" hint-placeholder-val="{{ false }}">
+              <div style="text-align:center;padding:30px 0;color:oklch(60% 0.01 240);font-size:13.5px">No appointments this day.</div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- BILLING -->
+      <sc-if value="{{ isBilling }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;overflow:auto;padding:58px 20px 0">
+          <div style="font-size:26px;font-weight:700;color:oklch(22% 0.015 240);margin-bottom:14px">Billing</div>
+          <div style="background:oklch(38% 0.07 195);border-radius:16px;padding:16px;margin-bottom:20px">
+            <div style="font-size:12.5px;color:oklch(90% 0.02 195);font-weight:500">Total outstanding</div>
+            <div style="font-size:28px;font-weight:700;color:#fff">₹{{ totalOutstanding }}</div>
+          </div>
+          <div style="font-size:14px;font-weight:700;color:oklch(22% 0.015 240);margin-bottom:10px">Pending payments</div>
+          <div style="display:flex;flex-direction:column;gap:8px;padding-bottom:24px">
+            <sc-for list="{{ billingPatients }}" as="b" hint-placeholder-count="4">
+              <div onClick="{{ b.open }}" style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid oklch(90% 0.006 90);border-radius:14px;padding:12px 14px;cursor:pointer">
+                <div style="width:42px;height:42px;border-radius:12px;background:{{ b.avatarBg }};display:flex;align-items:center;justify-content:center;color:{{ b.avatarFg }};font-weight:700;font-size:14px;flex-shrink:0">{{ b.initials }}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:14.5px;font-weight:600;color:oklch(22% 0.015 240)">{{ b.name }}</div>
+                  <div style="font-size:12px;color:oklch(52% 0.01 240)">{{ b.pendingCount }} pending invoice(s)</div>
+                </div>
+                <div style="font-size:14.5px;font-weight:700;color:oklch(58% 0.18 25)">₹{{ b.balance }}</div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ noBilling }}" hint-placeholder-val="{{ false }}">
+              <div style="text-align:center;padding:30px 0;color:oklch(60% 0.01 240);font-size:13.5px">All accounts settled. 🎉</div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- PATIENT DETAIL -->
+      <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;overflow:auto;padding-top:58px">
+          <div style="padding:0 20px">
+            <div onClick="{{ backFromDetail }}" style="display:flex;align-items:center;gap:4px;color:oklch(38% 0.07 195);font-size:14.5px;font-weight:600;cursor:pointer;margin-bottom:14px;width:fit-content">
+              <svg width="9" height="15" viewBox="0 0 9 15"><path d="M8 1L1.5 7.5L8 14" stroke="oklch(38% 0.07 195)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Back
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+              <div style="width:60px;height:60px;border-radius:16px;background:{{ selectedPatient.avatarBg }};display:flex;align-items:center;justify-content:center;color:{{ selectedPatient.avatarFg }};font-weight:700;font-size:19px;flex-shrink:0">{{ selectedPatient.initials }}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:19px;font-weight:700;color:oklch(22% 0.015 240)">{{ selectedPatient.name }}</div>
+                <div style="font-size:13px;color:oklch(52% 0.01 240)">{{ selectedPatient.age }} yrs · {{ selectedPatient.gender }} · {{ selectedPatient.phone }}</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;margin-bottom:18px;background:oklch(94% 0.008 90);border-radius:12px;padding:4px">
+              <sc-for list="{{ detailTabs }}" as="t" hint-placeholder-count="5">
+                <div onClick="{{ t.select }}" style="{{ t.style }}">{{ t.label }}</div>
+              </sc-for>
+            </div>
+          </div>
+
+          <sc-if value="{{ detailTab_overview }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:0 20px 24px;display:flex;flex-direction:column;gap:14px">
+              <div style="background:#fff;border:1px solid oklch(90% 0.006 90);border-radius:14px;padding:14px">
+                <div style="font-size:12px;font-weight:700;color:oklch(52% 0.01 240);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Contact</div>
+                <div style="font-size:13.5px;color:oklch(22% 0.015 240);line-height:1.6">DOB {{ selectedPatient.dob }}<br/>{{ selectedPatient.address }}</div>
+              </div>
+              <div style="background:oklch(97% 0.03 40 / 0.5);border:1px solid oklch(85% 0.06 40);border-radius:14px;padding:14px">
+                <div style="font-size:12px;font-weight:700;color:oklch(45% 0.12 40);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">Allergies / Alerts</div>
+                <div style="font-size:13.5px;color:oklch(30% 0.08 40)">{{ selectedPatient.allergies }}</div>
+              </div>
+              <div style="background:#fff;border:1px solid oklch(90% 0.006 90);border-radius:14px;padding:14px">
+                <div style="font-size:12px;font-weight:700;color:oklch(52% 0.01 240);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Dental notes</div>
+                <div style="font-size:13.5px;color:oklch(22% 0.015 240);line-height:1.6">{{ selectedPatient.medicalNotes }}</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ detailTab_treatment }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:0 20px 24px;display:flex;flex-direction:column;gap:10px">
+              <sc-for list="{{ selectedPatient.treatments }}" as="tr" hint-placeholder-count="3">
+                <div style="background:#fff;border:1px solid oklch(90% 0.006 90);border-radius:14px;padding:14px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                    <div style="font-size:14.5px;font-weight:600;color:oklch(22% 0.015 240)">{{ tr.name }}</div>
+                    <div style="{{ tr.statusStyle }}">{{ tr.status }}</div>
+                  </div>
+                  <div style="font-size:12px;color:oklch(52% 0.01 240);margin-bottom:8px">Started {{ tr.date }}</div>
+                  <div style="height:6px;border-radius:3px;background:oklch(93% 0.008 90);overflow:hidden">
+                    <div style="{{ tr.barStyle }}"></div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ detailTab_billing }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:0 20px 24px">
+              <div style="display:flex;justify-content:space-between;align-items:center;background:oklch(38% 0.07 195);border-radius:14px;padding:14px;margin-bottom:14px">
+                <div style="font-size:12.5px;color:oklch(90% 0.02 195);font-weight:500">Balance due</div>
+                <div style="font-size:20px;font-weight:700;color:#fff">₹{{ selectedPatientBalance }}</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <sc-for list="{{ selectedPatient.invoices }}" as="inv" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid oklch(90% 0.006 90);border-radius:12px;padding:12px 14px">
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:13.5px;font-weight:600;color:oklch(22% 0.015 240)">{{ inv.desc }}</div>
+                      <div style="font-size:11.5px;color:oklch(52% 0.01 240)">{{ inv.date }}</div>
+                    </div>
+                    <div style="font-size:14px;font-weight:700;color:oklch(22% 0.015 240)">₹{{ inv.amount }}</div>
+                    <div onClick="{{ inv.togglePaid }}" style="{{ inv.payBtnStyle }}">{{ inv.payBtnLabel }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ detailTab_photos }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:0 20px 24px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <sc-for list="{{ selectedPatient.photos }}" as="ph" hint-placeholder-count="4">
+                <div style="aspect-ratio:1;border-radius:12px;background:repeating-linear-gradient(45deg,oklch(93% 0.008 90),oklch(93% 0.008 90) 8px,oklch(97% 0.004 90) 8px,oklch(97% 0.004 90) 16px);border:1px solid oklch(90% 0.006 90);display:flex;align-items:center;justify-content:center;text-align:center;padding:8px">
+                  <span style="font-size:11px;font-family:ui-monospace,monospace;color:oklch(50% 0.01 240)">{{ ph.label }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ detailTab_rx }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:0 20px 24px;display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{ selectedPatient.rx }}" as="r" hint-placeholder-count="3">
+                <div style="background:#fff;border:1px solid oklch(90% 0.006 90);border-radius:12px;padding:12px 14px">
+                  <div style="font-size:14px;font-weight:600;color:oklch(22% 0.015 240)">{{ r.drug }}</div>
+                  <div style="font-size:12.5px;color:oklch(52% 0.01 240)">{{ r.dosage }} · prescribed {{ r.date }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ADD PATIENT FORM -->
+      <sc-if value="{{ isAddPatient }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;overflow:auto;padding:58px 20px 0">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <div onClick="{{ cancelAddPatient }}" style="font-size:15px;color:oklch(52% 0.01 240);cursor:pointer">Cancel</div>
+            <div style="font-size:15px;font-weight:700;color:oklch(22% 0.015 240)">New Patient</div>
+            <div onClick="{{ submitAddPatient }}" style="font-size:15px;font-weight:700;color:oklch(38% 0.07 195);cursor:pointer">Save</div>
+          </div>
+          <sc-if value="{{ addPatientError }}" hint-placeholder-val="{{ false }}">
+            <div style="background:oklch(96% 0.04 25);color:oklch(45% 0.15 25);font-size:12.5px;font-weight:600;padding:10px 12px;border-radius:10px;margin-bottom:12px">{{ addPatientError }}</div>
+          </sc-if>
+          <div style="display:flex;flex-direction:column;gap:12px;padding-bottom:32px">
+            <label style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:12px;font-weight:600;color:oklch(52% 0.01 240)">Full name</span>
+              <input type="text" value="{{ npForm.name }}" onChange="{{ npForm.setName }}" placeholder="e.g. Aarav Shah" style="padding:11px 13px;border-radius:11px;border:1px solid oklch(88% 0.006 90);font-size:14.5px;color:oklch(22% 0.015 240)" />
+            </label>
+            <div style="display:flex;gap:10px">
+              <label style="display:flex;flex-direction:column;gap:5px;flex:1">
+                <span style="font-size:12px;font-weight:600;color:oklch(52% 0.01 240)">Age</span>
+                <input type="number" value="{{ npForm.age }}" onChange="{{ npForm.setAge }}" style="padding:11px 13px;border-radius:11px;border:1px solid oklch(88% 0.006 90);font-size:14.5px;color:oklch(22% 0.015 240)" />
+              </label>
+              <label style="display:flex;flex-direction:column;gap:5px;flex:1">
+                <span style="font-size:12px;font-weight:600;color:oklch(52% 0.01 240)">Gender</span>
+                <select value="{{ npForm.gender }}" onChange="{{ npForm.setGender }}" style="padding:11px 13px;border-radius:11px;border:1px solid oklch(88% 0.006 90);font-size:14.5px;color:oklch(22% 0.015 240);background:#fff">
+                  <option value="Female">Female</option>
+                  <option value="Male">Male</option>
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+            </div>
+            <label style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:12px;font-weight:600;color:oklch(52% 0.01 240)">Phone</span>
+              <input type="tel" value="{{ npForm.phone }}" onChange="{{ npForm.setPhone }}" placeholder="+91 98xxxxxxx" style="padding:11px 13px;border-radius:11px;border:1px solid oklch(88% 0.006 90);font-size:14.5px;color:oklch(22% 0.015 240)" />
+            </label>
+            <label style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:12px;font-weight:600;color:oklch(52% 0.01 240)">Date of birth</span>
+              <input type="date" value="{{ npForm.dob }}" onChange="{{ npForm.setDob }}" style="padding:11px 13px;border-radius:11px;border:1px solid oklch(88% 0.006 90);font-size:14.5px;color:oklch(22% 0.015 240)" />
+            </label>
+            <label style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:12px;font-weight:600;color:oklch(52% 0.01 240)">Address</span>
+              <input type="text" value="{{ npForm.address }}" onChange="{{ npForm.setAddress }}" style="padding:11px 13px;border-radius:11px;border:1px solid oklch(88% 0.006 90);font-size:14.5px;color:oklch(22% 0.015 240)" />
+            </label>
+            <label style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:12px;font-weight:600;color:oklch(52% 0.01 240)">Allergies / medical alerts</span>
+              <input type="text" value="{{ npForm.allergies }}" onChange="{{ npForm.setAllergies }}" placeholder="None known" style="padding:11px 13px;border-radius:11px;border:1px solid oklch(88% 0.006 90);font-size:14.5px;color:oklch(22% 0.015 240)" />
+            </label>
+            <label style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:12px;font-weight:600;color:oklch(52% 0.01 240)">Dental notes</span>
+              <textarea value="{{ npForm.medicalNotes }}" onChange="{{ npForm.setMedicalNotes }}" rows="3" style="padding:11px 13px;border-radius:11px;border:1px solid oklch(88% 0.006 90);font-size:14.5px;color:oklch(22% 0.015 240);font-family:inherit;resize:none"></textarea>
+            </label>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ADD APPOINTMENT FORM -->
+      <sc-if value="{{ isAddAppt }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;overflow:auto;padding:58px 20px 0">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <div onClick="{{ cancelAddAppt }}" style="font-size:15px;color:oklch(52% 0.01 240);cursor:pointer">Cancel</div>
+            <div style="font-size:15px;font-weight:700;color:oklch(22% 0.015 240)">New Appointment</div>
+            <div onClick="{{ submitAddAppt }}" style="font-size:15px;font-weight:700;color:oklch(38% 0.07 195);cursor:pointer">Save</div>
+          </div>
+          <sc-if value="{{ addApptError }}" hint-placeholder-val="{{ false }}">
+            <div style="background:oklch(96% 0.04 25);color:oklch(45% 0.15 25);font-size:12.5px;font-weight:600;padding:10px 12px;border-radius:10px;margin-bottom:12px">{{ addApptError }}</div>
+          </sc-if>
+          <div style="display:flex;flex-direction:column;gap:12px;padding-bottom:32px">
+            <label style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:12px;font-weight:600;color:oklch(52% 0.01 240)">Patient</span>
+              <select value="{{ naForm.patientId }}" onChange="{{ naForm.setPatientId }}" style="padding:11px 13px;border-radius:11px;border:1px solid oklch(88% 0.006 90);font-size:14.5px;color:oklch(22% 0.015 240);background:#fff">
+                <option value="">Select patient…</option>
+                <sc-for list="{{ patientOptions }}" as="po" hint-placeholder-count="6">
+                  <option value="{{ po.id }}">{{ po.name }}</option>
+                </sc-for>
+              </select>
+            </label>
+            <div style="display:flex;gap:10px">
+              <label style="display:flex;flex-direction:column;gap:5px;flex:1">
+                <span style="font-size:12px;font-weight:600;color:oklch(52% 0.01 240)">Date</span>
+                <input type="date" value="{{ naForm.date }}" onChange="{{ naForm.setDate }}" style="padding:11px 13px;border-radius:11px;border:1px solid oklch(88% 0.006 90);font-size:14.5px;color:oklch(22% 0.015 240)" />
+              </label>
+              <label style="display:flex;flex-direction:column;gap:5px;flex:1">
+                <span style="font-size:12px;font-weight:600;color:oklch(52% 0.01 240)">Time</span>
+                <input type="time" value="{{ naForm.time }}" onChange="{{ naForm.setTime }}" style="padding:11px 13px;border-radius:11px;border:1px solid oklch(88% 0.006 90);font-size:14.5px;color:oklch(22% 0.015 240)" />
+              </label>
+            </div>
+            <label style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:12px;font-weight:600;color:oklch(52% 0.01 240)">Treatment type</span>
+              <select value="{{ naForm.type }}" onChange="{{ naForm.setType }}" style="padding:11px 13px;border-radius:11px;border:1px solid oklch(88% 0.006 90);font-size:14.5px;color:oklch(22% 0.015 240);background:#fff">
+                <option>Check-up</option>
+                <option>Scaling & Polishing</option>
+                <option>Root Canal</option>
+                <option>Crown Fitting</option>
+                <option>Braces Adjustment</option>
+                <option>Extraction</option>
+                <option>Whitening</option>
+                <option>Implant Consult</option>
+              </select>
+            </label>
+            <label style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:12px;font-weight:600;color:oklch(52% 0.01 240)">Duration (min)</span>
+              <select value="{{ naForm.duration }}" onChange="{{ naForm.setDuration }}" style="padding:11px 13px;border-radius:11px;border:1px solid oklch(88% 0.006 90);font-size:14.5px;color:oklch(22% 0.015 240);background:#fff">
+                <option value="15">15</option>
+                <option value="30">30</option>
+                <option value="45">45</option>
+                <option value="60">60</option>
+                <option value="90">90</option>
+              </select>
+            </label>
+            <label style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:12px;font-weight:600;color:oklch(52% 0.01 240)">Notes</span>
+              <textarea value="{{ naForm.notes }}" onChange="{{ naForm.setNotes }}" rows="3" style="padding:11px 13px;border-radius:11px;border:1px solid oklch(88% 0.006 90);font-size:14.5px;color:oklch(22% 0.015 240);font-family:inherit;resize:none"></textarea>
+            </label>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- BOTTOM TAB BAR -->
+      <sc-if value="{{ showTabBar }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;padding:8px 8px 22px;background:rgba(255,255,255,0.92);backdrop-filter:blur(12px);border-top:1px solid oklch(90% 0.006 90);position:relative;z-index:5">
+          <div onClick="{{ goHome }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer">
+            <svg width="22" height="22" viewBox="0 0 24 24"><path d="M4 11L12 4l8 7v9a1 1 0 01-1 1h-5v-6H10v6H5a1 1 0 01-1-1v-9z" fill="{{ tabColors.home }}"/></svg>
+            <span style="font-size:10.5px;font-weight:600;color:{{ tabColors.home }}">Home</span>
+          </div>
+          <div onClick="{{ goPatients }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer">
+            <svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="{{ tabColors.patients }}"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" fill="{{ tabColors.patients }}"/></svg>
+            <span style="font-size:10.5px;font-weight:600;color:{{ tabColors.patients }}">Patients</span>
+          </div>
+          <div onClick="{{ goAppointments }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer">
+            <svg width="22" height="22" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3" fill="none" stroke="{{ tabColors.appointments }}" stroke-width="2"/><line x1="3" y1="10" x2="21" y2="10" stroke="{{ tabColors.appointments }}" stroke-width="2"/><line x1="8" y1="2.5" x2="8" y2="6.5" stroke="{{ tabColors.appointments }}" stroke-width="2" stroke-linecap="round"/><line x1="16" y1="2.5" x2="16" y2="6.5" stroke="{{ tabColors.appointments }}" stroke-width="2" stroke-linecap="round"/></svg>
+            <span style="font-size:10.5px;font-weight:600;color:{{ tabColors.appointments }}">Schedule</span>
+          </div>
+          <div onClick="{{ goBilling }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer">
+            <svg width="22" height="22" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2" fill="none" stroke="{{ tabColors.billing }}" stroke-width="2"/><line x1="8" y1="8" x2="16" y2="8" stroke="{{ tabColors.billing }}" stroke-width="1.6"/><line x1="8" y1="12" x2="16" y2="12" stroke="{{ tabColors.billing }}" stroke-width="1.6"/><line x1="8" y1="16" x2="13" y2="16" stroke="{{ tabColors.billing }}" stroke-width="1.6"/></svg>
+            <span style="font-size:10.5px;font-weight:600;color:{{ tabColors.billing }}">Billing</span>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+  </x-import>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const TEAL = 'oklch(38% 0.07 195)';
+const TEAL_MUTED = 'oklch(70% 0.01 240)';
+const GOLD = 'oklch(72% 0.13 85)';
+const RED = 'oklch(58% 0.18 25)';
+const GREEN = 'oklch(60% 0.12 150)';
+
+const TODAY = '2026-07-30';
+const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function fmtDate(iso) {
+  const d = new Date(iso + 'T00:00:00Z');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return months[d.getUTCMonth()] + ' ' + d.getUTCDate();
+}
+function initialsOf(name) {
+  return name.split(' ').filter(Boolean).slice(0,2).map(w => w[0]).join('').toUpperCase();
+}
+function addDays(iso, n) {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0,10);
+}
+
+const AVATAR_PALETTE = [
+  { bg: 'oklch(90% 0.03 195)', fg: 'oklch(30% 0.06 195)' },
+  { bg: 'oklch(92% 0.05 85)', fg: 'oklch(35% 0.1 85)' },
+  { bg: 'oklch(91% 0.03 250)', fg: 'oklch(35% 0.06 250)' },
+  { bg: 'oklch(92% 0.04 30)', fg: 'oklch(38% 0.09 30)' },
+];
+
+function seedPatients() {
+  return [
+    { id: 'p1', name: 'Aarav Shah', age: 34, gender: 'Male', phone: '+91 98200 11223', dob: '1992-03-14',
+      address: 'B-12 Shreeji Nagar, Ahmedabad', allergies: 'Penicillin sensitivity', status: 'active', lastVisit: 'Jul 18',
+      medicalNotes: 'Mild gum recession, upper molars. Recommend soft-bristle brush.',
+      treatments: [
+        { id: 't1', name: 'Root Canal — Tooth #36', date: 'Jun 20', status: 'In Progress', progress: 60 },
+        { id: 't2', name: 'Scaling & Polishing', date: 'Jul 18', status: 'Completed', progress: 100 },
+      ],
+      invoices: [
+        { id: 'i1', desc: 'Root Canal — Session 2', date: 'Jul 18', amount: 4500, paid: false },
+        { id: 'i2', desc: 'Consultation', date: 'Jun 20', amount: 500, paid: true },
+      ],
+      rx: [{ id: 'r1', drug: 'Amoxicillin 500mg', dosage: '1 tab, 3x/day, 5 days', date: 'Jun 20' }],
+      photos: [{ id: 'ph1', label: 'X-ray · pre-op' }, { id: 'ph2', label: 'Intraoral · #36' }],
+    },
+    { id: 'p2', name: 'Priya Nair', age: 27, gender: 'Female', phone: '+91 98250 44556', dob: '1999-07-02',
+      address: '204 Lotus Apts, Vastrapur', allergies: 'None known', status: 'new', lastVisit: 'Jul 27',
+      medicalNotes: 'First visit. Interested in orthodontic consult.',
+      treatments: [{ id: 't3', name: 'Orthodontic Consultation', date: 'Jul 27', status: 'Planned', progress: 10 }],
+      invoices: [{ id: 'i3', desc: 'New Patient Consultation', date: 'Jul 27', amount: 800, paid: false }],
+      rx: [],
+      photos: [{ id: 'ph3', label: 'Intraoral · full arch' }],
+    },
+    { id: 'p3', name: 'Rohan Mehta', age: 45, gender: 'Male', phone: '+91 99040 77889', dob: '1981-11-09',
+      address: '5 Sarvodaya Society, Navrangpura', allergies: 'Latex allergy', status: 'active', lastVisit: 'Jul 25',
+      medicalNotes: 'Crown placed on #14, monitor bite alignment.',
+      treatments: [{ id: 't4', name: 'Crown — Tooth #14', date: 'Jul 10', status: 'Completed', progress: 100 }],
+      invoices: [
+        { id: 'i4', desc: 'Ceramic Crown', date: 'Jul 10', amount: 12000, paid: false },
+        { id: 'i5', desc: 'Follow-up X-ray', date: 'Jul 25', amount: 350, paid: true },
+      ],
+      rx: [{ id: 'r2', drug: 'Ibuprofen 400mg', dosage: 'As needed for pain', date: 'Jul 10' }],
+      photos: [{ id: 'ph4', label: 'X-ray · #14 post-op' }],
+    },
+    { id: 'p4', name: 'Sneha Joshi', age: 19, gender: 'Female', phone: '+91 97120 33445', dob: '2007-01-22',
+      address: '11 Kalyan Society, Naranpura', allergies: 'None known', status: 'active', lastVisit: 'Jul 15',
+      medicalNotes: 'Braces adjustment monthly. Good compliance.',
+      treatments: [{ id: 't5', name: 'Orthodontic Braces', date: 'Feb 5', status: 'In Progress', progress: 40 }],
+      invoices: [{ id: 'i6', desc: 'Monthly Adjustment', date: 'Jul 15', amount: 1500, paid: true }],
+      rx: [],
+      photos: [{ id: 'ph5', label: 'Intraoral · braces check' }, { id: 'ph6', label: 'Progress photo' }],
+    },
+    { id: 'p5', name: 'Kunal Desai', age: 58, gender: 'Male', phone: '+91 90540 22110', dob: '1968-05-30',
+      address: '9 Shantivan Society, Paldi', allergies: 'Hypertension — avoid epinephrine-heavy anesthesia', status: 'active', lastVisit: 'Jul 29',
+      medicalNotes: 'Extraction healing well. Implant consult scheduled.',
+      treatments: [
+        { id: 't6', name: 'Tooth Extraction — #26', date: 'Jul 15', status: 'Completed', progress: 100 },
+        { id: 't7', name: 'Dental Implant — #26', date: 'Jul 29', status: 'Planned', progress: 5 },
+      ],
+      invoices: [{ id: 'i7', desc: 'Extraction Procedure', date: 'Jul 15', amount: 3000, paid: false }],
+      rx: [{ id: 'r3', drug: 'Amoxicillin 500mg', dosage: '1 tab, 2x/day, 5 days', date: 'Jul 15' }],
+      photos: [{ id: 'ph7', label: 'X-ray · pre-extraction' }],
+    },
+    { id: 'p6', name: 'Meera Iyer', age: 31, gender: 'Female', phone: '+91 98980 55667', dob: '1995-09-17',
+      address: '3 Green Valley, Bodakdev', allergies: 'None known', status: 'active', lastVisit: 'Jul 22',
+      medicalNotes: 'Teeth whitening completed, satisfied with results.',
+      treatments: [{ id: 't8', name: 'Teeth Whitening', date: 'Jul 22', status: 'Completed', progress: 100 }],
+      invoices: [{ id: 'i8', desc: 'Whitening Session', date: 'Jul 22', amount: 6000, paid: true }],
+      rx: [],
+      photos: [{ id: 'ph8', label: 'Before whitening' }, { id: 'ph9', label: 'After whitening' }],
+    },
+  ];
+}
+
+function seedAppointments() {
+  return [
+    { id: 'a1', patientId: 'p1', date: TODAY, time: '09:30', type: 'Root Canal — Session 2', duration: 45, notes: '' },
+    { id: 'a2', patientId: 'p2', date: TODAY, time: '11:00', type: 'Orthodontic Consultation', duration: 30, notes: '' },
+    { id: 'a3', patientId: 'p5', date: TODAY, time: '15:00', type: 'Implant Consult', duration: 30, notes: '' },
+    { id: 'a4', patientId: 'p3', date: addDays(TODAY, 1), time: '10:00', type: 'Bite Check', duration: 20, notes: '' },
+    { id: 'a5', patientId: 'p4', date: addDays(TODAY, 2), time: '13:30', type: 'Braces Adjustment', duration: 30, notes: '' },
+  ];
+}
+
+class Component extends DCLogic {
+  state = {
+    screen: 'home',
+    activeTab: 'home',
+    selectedPatientId: null,
+    detailTab: 'overview',
+    patientSearch: '',
+    patientFilter: 'all',
+    selectedDate: TODAY,
+    patients: seedPatients(),
+    appointments: seedAppointments(),
+    addPatientError: '',
+    addApptError: '',
+    npForm: { name: '', age: '', gender: 'Female', phone: '', dob: '', address: '', allergies: '', medicalNotes: '' },
+    naForm: { patientId: '', date: TODAY, time: '10:00', type: 'Check-up', duration: '30', notes: '' },
+  };
+
+  patientBalance(p) {
+    return p.invoices.filter(i => !i.paid).reduce((s, i) => s + i.amount, 0);
+  }
+
+  openPatient = (id) => this.setState({ selectedPatientId: id, detailTab: 'overview', screen: 'detail' });
+  backFromDetail = () => this.setState({ screen: this.state.activeTab });
+  setActiveScreen = (tab) => this.setState({ screen: tab, activeTab: tab });
+  goHome = () => this.setActiveScreen('home');
+  goPatients = () => this.setActiveScreen('patients');
+  goAppointments = () => this.setActiveScreen('appointments');
+  goBilling = () => this.setActiveScreen('billing');
+
+  openAddPatient = () => this.setState({ screen: 'addPatient', addPatientError: '', npForm: { name: '', age: '', gender: 'Female', phone: '', dob: '', address: '', allergies: '', medicalNotes: '' } });
+  cancelAddPatient = () => this.setState({ screen: this.state.activeTab });
+  setNpField = (field) => (e) => this.setState({ npForm: { ...this.state.npForm, [field]: e.target.value } });
+
+  submitAddPatient = () => {
+    const f = this.state.npForm;
+    if (!f.name.trim()) { this.setState({ addPatientError: 'Please enter the patient\u2019s name.' }); return; }
+    const id = 'p' + (this.state.patients.length + 1) + '_' + Date.now();
+    const palette = AVATAR_PALETTE[this.state.patients.length % AVATAR_PALETTE.length];
+    const newPatient = {
+      id, name: f.name.trim(), age: f.age || '—', gender: f.gender, phone: f.phone || '—',
+      dob: f.dob || '—', address: f.address || '—', allergies: f.allergies || 'None known',
+      status: 'new', lastVisit: 'Today', medicalNotes: f.medicalNotes || 'No notes yet.',
+      treatments: [], invoices: [], rx: [], photos: [], _avatar: palette,
+    };
+    this.setState({
+      patients: [...this.state.patients, newPatient],
+      screen: 'detail', activeTab: 'patients', selectedPatientId: id, detailTab: 'overview',
+    });
+  };
+
+  openAddAppt = () => this.setState({ screen: 'addAppt', addApptError: '', naForm: { patientId: '', date: this.state.selectedDate, time: '10:00', type: 'Check-up', duration: '30', notes: '' } });
+  cancelAddAppt = () => this.setState({ screen: this.state.activeTab });
+  setNaField = (field) => (e) => this.setState({ naForm: { ...this.state.naForm, [field]: e.target.value } });
+
+  submitAddAppt = () => {
+    const f = this.state.naForm;
+    if (!f.patientId) { this.setState({ addApptError: 'Please select a patient.' }); return; }
+    const patient = this.state.patients.find(p => p.id === f.patientId);
+    const newAppt = { id: 'a' + Date.now(), patientId: f.patientId, date: f.date, time: f.time, type: f.type, duration: Number(f.duration), notes: f.notes };
+    this.setState({
+      appointments: [...this.state.appointments, newAppt],
+      screen: 'appointments', activeTab: 'appointments', selectedDate: f.date,
+    });
+  };
+
+  render() {
+    const s = this.state;
+    const isHome = s.screen === 'home';
+    const isPatients = s.screen === 'patients';
+    const isAppointments = s.screen === 'appointments';
+    const isBilling = s.screen === 'billing';
+    const isDetail = s.screen === 'detail';
+    const isAddPatient = s.screen === 'addPatient';
+    const isAddAppt = s.screen === 'addAppt';
+    const showTabBar = !isDetail && !isAddPatient && !isAddAppt;
+
+    const patientsWithBalance = s.patients.map((p, idx) => ({
+      ...p, balance: this.patientBalance(p), avatar: p._avatar || AVATAR_PALETTE[idx % AVATAR_PALETTE.length],
+    }));
+
+    // Home
+    const todayList = s.appointments.filter(a => a.date === TODAY).sort((a,b) => a.time.localeCompare(b.time));
+    const todaysAppointments = todayList.map(a => {
+      const p = s.patients.find(pp => pp.id === a.patientId);
+      return { time: a.time, patientName: p ? p.name : 'Unknown', type: a.type, open: () => this.openPatient(a.patientId) };
+    });
+    const homeStats = {
+      todayCount: todayList.length, patientCount: s.patients.length,
+      hasToday: todayList.length > 0, noToday: todayList.length === 0,
+    };
+
+    // Patients tab
+    const filterDefs = [
+      { key: 'all', label: 'All' }, { key: 'active', label: 'In Treatment' },
+      { key: 'new', label: 'New' }, { key: 'overdue', label: 'Overdue' },
+    ];
+    const chipStyle = (active) => `padding:7px 14px;border-radius:999px;font-size:12.5px;font-weight:600;white-space:nowrap;cursor:pointer;background:${active ? TEAL : '#fff'};color:${active ? '#fff' : 'oklch(40% 0.01 240)'};border:1px solid ${active ? TEAL : 'oklch(88% 0.006 90)'}`;
+    const patientFilters = filterDefs.map(f => ({
+      label: f.label, style: chipStyle(s.patientFilter === f.key), select: () => this.setState({ patientFilter: f.key }),
+    }));
+
+    const q = s.patientSearch.trim().toLowerCase();
+    const filteredPatientsRaw = patientsWithBalance.filter(p => {
+      if (q && !p.name.toLowerCase().includes(q)) return false;
+      if (s.patientFilter === 'active') return p.status === 'active';
+      if (s.patientFilter === 'new') return p.status === 'new';
+      if (s.patientFilter === 'overdue') return p.balance > 0;
+      return true;
+    });
+    const badgeFor = (p) => {
+      if (p.balance > 0) return { label: '₹' + p.balance + ' due', style: `font-size:11px;font-weight:700;padding:4px 8px;border-radius:8px;background:oklch(95% 0.04 25);color:${RED};flex-shrink:0` };
+      if (p.status === 'new') return { label: 'New', style: `font-size:11px;font-weight:700;padding:4px 8px;border-radius:8px;background:oklch(95% 0.03 90);color:${GOLD.replace('72%','40%')};flex-shrink:0` };
+      return { label: 'Active', style: `font-size:11px;font-weight:700;padding:4px 8px;border-radius:8px;background:oklch(94% 0.03 150);color:${GREEN};flex-shrink:0` };
+    };
+    const filteredPatients = filteredPatientsRaw.map(p => {
+      const b = badgeFor(p);
+      return {
+        name: p.name, age: p.age, gender: p.gender, lastVisit: p.lastVisit,
+        initials: initialsOf(p.name), avatarBg: p.avatar.bg, avatarFg: p.avatar.fg,
+        badgeLabel: b.label, badgeStyle: b.style, open: () => this.openPatient(p.id),
+      };
+    });
+    const noPatientResults = filteredPatients.length === 0;
+
+    // Appointments tab
+    const weekStart = addDays(TODAY, -3);
+    const weekDaysArr = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+    const weekDays = weekDaysArr.map(iso => {
+      const d = new Date(iso + 'T00:00:00Z');
+      const selected = iso === s.selectedDate;
+      const hasAppt = s.appointments.some(a => a.date === iso);
+      return {
+        dow: DOW[d.getUTCDay()], num: d.getUTCDate(), hasAppt,
+        style: `flex:1;text-align:center;padding:8px 4px;border-radius:12px;cursor:pointer;background:${selected ? TEAL : '#fff'};color:${selected ? '#fff' : 'oklch(30% 0.01 240)'};border:1px solid ${selected ? TEAL : 'oklch(88% 0.006 90)'}`,
+        select: () => this.setState({ selectedDate: iso }),
+      };
+    });
+    const selectedDateLabel = s.selectedDate === TODAY ? 'Today, ' + fmtDate(s.selectedDate) : fmtDate(s.selectedDate);
+    const apptsForSelectedDayRaw = s.appointments.filter(a => a.date === s.selectedDate).sort((a,b) => a.time.localeCompare(b.time));
+    const apptsForSelectedDay = apptsForSelectedDayRaw.map(a => {
+      const p = s.patients.find(pp => pp.id === a.patientId);
+      return { time: a.time, patientName: p ? p.name : 'Unknown', type: a.type, duration: a.duration, open: () => this.openPatient(a.patientId) };
+    });
+    const noApptsThisDay = apptsForSelectedDay.length === 0;
+
+    // Billing tab
+    const billingPatientsRaw = patientsWithBalance.filter(p => p.balance > 0).sort((a,b) => b.balance - a.balance);
+    const billingPatients = billingPatientsRaw.map(p => ({
+      name: p.name, initials: initialsOf(p.name), avatarBg: p.avatar.bg, avatarFg: p.avatar.fg,
+      pendingCount: p.invoices.filter(i => !i.paid).length, balance: p.balance, open: () => this.openPatient(p.id),
+    }));
+    const totalOutstanding = billingPatientsRaw.reduce((sum, p) => sum + p.balance, 0);
+    const noBilling = billingPatients.length === 0;
+
+    // Detail
+    const selectedPatientRaw = s.selectedPatientId ? patientsWithBalance.find(p => p.id === s.selectedPatientId) : null;
+    let selectedPatient = { name: '', age: '', gender: '', phone: '', dob: '', address: '', allergies: '', medicalNotes: '', initials: '', avatarBg: '', avatarFg: '', treatments: [], invoices: [], rx: [], photos: [] };
+    let selectedPatientBalance = 0;
+    const tabDefs = [
+      { key: 'overview', label: 'Overview' }, { key: 'treatment', label: 'Treatment' },
+      { key: 'billing', label: 'Billing' }, { key: 'photos', label: 'Photos' }, { key: 'rx', label: 'Rx' },
+    ];
+    const tabStyle = (active) => `flex:1;text-align:center;padding:8px 4px;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;background:${active ? '#fff' : 'transparent'};color:${active ? TEAL : 'oklch(50% 0.01 240)'};box-shadow:${active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'}`;
+    const detailTabs = tabDefs.map(t => ({ label: t.label, style: tabStyle(s.detailTab === t.key), select: () => this.setState({ detailTab: t.key }) }));
+
+    if (selectedPatientRaw) {
+      selectedPatientBalance = selectedPatientRaw.balance;
+      const invoices = selectedPatientRaw.invoices.map(inv => ({
+        desc: inv.desc, date: inv.date, amount: inv.amount,
+        payBtnLabel: inv.paid ? 'Paid' : 'Mark Paid',
+        payBtnStyle: `font-size:11px;font-weight:700;padding:6px 10px;border-radius:8px;cursor:pointer;flex-shrink:0;background:${inv.paid ? 'oklch(94% 0.03 150)' : TEAL};color:${inv.paid ? GREEN : '#fff'}`,
+        togglePaid: () => {
+          const patients = s.patients.map(p => p.id !== selectedPatientRaw.id ? p : {
+            ...p, invoices: p.invoices.map(i => i.id === inv.id ? { ...i, paid: !i.paid } : i),
+          });
+          this.setState({ patients });
+        },
+      }));
+      const treatments = selectedPatientRaw.treatments.map(tr => ({
+        name: tr.name, date: tr.date, status: tr.status,
+        statusStyle: `font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:7px;background:${tr.status === 'Completed' ? 'oklch(94% 0.03 150)' : tr.status === 'In Progress' ? 'oklch(95% 0.03 90)' : 'oklch(94% 0.008 90)'};color:${tr.status === 'Completed' ? GREEN : tr.status === 'In Progress' ? 'oklch(45% 0.1 85)' : 'oklch(50% 0.01 240)'}`,
+        barStyle: `height:100%;width:${tr.progress}%;background:${tr.status === 'Completed' ? GREEN : TEAL};border-radius:3px`,
+      }));
+      selectedPatient = {
+        name: selectedPatientRaw.name, age: selectedPatientRaw.age, gender: selectedPatientRaw.gender,
+        phone: selectedPatientRaw.phone, dob: selectedPatientRaw.dob, address: selectedPatientRaw.address,
+        allergies: selectedPatientRaw.allergies, medicalNotes: selectedPatientRaw.medicalNotes,
+        initials: initialsOf(selectedPatientRaw.name), avatarBg: selectedPatientRaw.avatar.bg, avatarFg: selectedPatientRaw.avatar.fg,
+        treatments, invoices, rx: selectedPatientRaw.rx, photos: selectedPatientRaw.photos,
+      };
+    }
+
+    // Forms
+    const npForm = {
+      name: s.npForm.name, age: s.npForm.age, gender: s.npForm.gender, phone: s.npForm.phone,
+      dob: s.npForm.dob, address: s.npForm.address, allergies: s.npForm.allergies, medicalNotes: s.npForm.medicalNotes,
+      setName: this.setNpField('name'), setAge: this.setNpField('age'), setGender: this.setNpField('gender'),
+      setPhone: this.setNpField('phone'), setDob: this.setNpField('dob'), setAddress: this.setNpField('address'),
+      setAllergies: this.setNpField('allergies'), setMedicalNotes: this.setNpField('medicalNotes'),
+    };
+    const patientOptions = s.patients.map(p => ({ id: p.id, name: p.name }));
+    const naForm = {
+      patientId: s.naForm.patientId, date: s.naForm.date, time: s.naForm.time, type: s.naForm.type,
+      duration: s.naForm.duration, notes: s.naForm.notes,
+      setPatientId: this.setNaField('patientId'), setDate: this.setNaField('date'), setTime: this.setNaField('time'),
+      setType: this.setNaField('type'), setDuration: this.setNaField('duration'), setNotes: this.setNaField('notes'),
+    };
+
+    const tabColors = {
+      home: isHome ? TEAL : TEAL_MUTED, patients: isPatients ? TEAL : TEAL_MUTED,
+      appointments: isAppointments ? TEAL : TEAL_MUTED, billing: isBilling ? TEAL : TEAL_MUTED,
+    };
+
+    return {
+      isHome, isPatients, isAppointments, isBilling, isDetail, isAddPatient, isAddAppt, showTabBar,
+      homeStats, todaysAppointments,
+      patientSearch: s.patientSearch, onPatientSearchChange: (e) => this.setState({ patientSearch: e.target.value }),
+      patientFilters, filteredPatients, noPatientResults,
+      weekDays, selectedDateLabel, apptsForSelectedDay, noApptsThisDay,
+      billingPatients, totalOutstanding, noBilling,
+      selectedPatient, selectedPatientBalance,
+      detailTabs,
+      detailTab_overview: s.detailTab === 'overview', detailTab_treatment: s.detailTab === 'treatment',
+      detailTab_billing: s.detailTab === 'billing', detailTab_photos: s.detailTab === 'photos', detailTab_rx: s.detailTab === 'rx',
+      backFromDetail: this.backFromDetail,
+      goHome: this.goHome, goPatients: this.goPatients, goAppointments: this.goAppointments, goBilling: this.goBilling,
+      openAddPatient: this.openAddPatient, cancelAddPatient: this.cancelAddPatient, submitAddPatient: this.submitAddPatient,
+      openAddAppt: this.openAddAppt, cancelAddAppt: this.cancelAddAppt, submitAddAppt: this.submitAddAppt,
+      addPatientError: s.addPatientError, addApptError: s.addApptError,
+      npForm, naForm, patientOptions,
+      tabColors,
+    };
+  }
+
+  renderVals() { return this.render(); }
+}
+</script>
+</body>
+</html>
